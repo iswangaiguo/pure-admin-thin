@@ -52,7 +52,7 @@ const onLogin = async (formEl: FormInstance | undefined) => {
           password: ruleForm.password
         })
         .then(res => {
-          if (res.success) {
+          if (res?.data) {
             // 获取后端路由
             return initRouter().then(() => {
               disabled.value = true;
@@ -65,6 +65,22 @@ const onLogin = async (formEl: FormInstance | undefined) => {
             });
           } else {
             message("登录失败", { type: "error" });
+          }
+        })
+        .catch(error => {
+          const errData = error?.response?.data?.error;
+          if (errData?.message) {
+            let msg = errData.message;
+            if (errData.remaining_attempts != null) {
+              msg += `，剩余尝试次数：${errData.remaining_attempts}`;
+            }
+            if (errData.retry_after != null) {
+              const mins = Math.ceil(errData.retry_after / 60);
+              msg += `，请${mins}分钟后再试`;
+            }
+            message(msg, { type: "error" });
+          } else {
+            message("登录失败，请稍后重试", { type: "error" });
           }
         })
         .finally(() => (loading.value = false));
