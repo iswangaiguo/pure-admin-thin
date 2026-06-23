@@ -320,12 +320,15 @@ function addAsyncRoutes(arrRoutes: Array<RouteRecordRaw>) {
       v.name = (v.children[0].name as string) + "Parent";
     if (v.meta?.frameSrc) {
       v.component = IFrame;
-    } else {
-      // 对后端传component组件路径和不传做兼容（如果后端传component组件路径，那么path可以随便写，如果不传，component组件路径会跟path保持一致）
-      const index = v?.component
-        ? modulesRoutesKeys.findIndex(ev => ev.includes(v.component as any))
-        : modulesRoutesKeys.findIndex(ev => ev.includes(v.path));
-      v.component = modulesRoutes[modulesRoutesKeys[index]];
+    } else if (v?.component) {
+      // 仅当后端明确传了 component 时才解析，避免目录类型路由（M）因 path 误匹配到错误的组件
+      // 例如 /system 路径会匹配到 /src/views/system/menu/index.vue 中 "/system" 子串
+      const index = modulesRoutesKeys.findIndex(ev =>
+        ev.includes(v.component as string)
+      );
+      if (index !== -1) {
+        v.component = modulesRoutes[modulesRoutesKeys[index]];
+      }
     }
     if (v?.children && v.children.length) {
       addAsyncRoutes(v.children);
