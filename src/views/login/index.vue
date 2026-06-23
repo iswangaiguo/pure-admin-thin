@@ -71,11 +71,11 @@ const onLogin = async (formEl: FormInstance | undefined) => {
           const errData = error?.response?.data?.error;
           if (errData?.message) {
             let msg = errData.message;
-            if (errData.remaining_attempts != null) {
-              msg += `，剩余尝试次数：${errData.remaining_attempts}`;
+            if (errData.remainingAttempts != null) {
+              msg += `，剩余尝试次数：${errData.remainingAttempts}`;
             }
-            if (errData.retry_after != null) {
-              const mins = Math.ceil(errData.retry_after / 60);
+            if (errData.retryAfter != null) {
+              const mins = Math.ceil(errData.retryAfter / 60);
               msg += `，请${mins}分钟后再试`;
             }
             message(msg, { type: "error" });
