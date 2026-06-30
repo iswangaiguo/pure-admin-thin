@@ -30,15 +30,18 @@ export type LoginSuccessResult = {
 
 /** 登录错误响应 */
 export type LoginErrorResult = {
-  error: {
+  errors: {
     /** 错误代码 */
     code: string;
     /** 错误消息 */
     message: string;
-    /** 剩余尝试次数（密码错误时） */
-    remainingAttempts?: number;
-    /** 等待时间（秒，锁定时） */
-    retryAfter?: number;
+    /** 附加详情 */
+    details?: {
+      /** 剩余尝试次数（密码错误时） */
+      remainingAttempts?: number;
+      /** 等待时间（秒，锁定时） */
+      retryAfter?: number;
+    };
   };
 };
 
@@ -115,7 +118,7 @@ export type UserListParams = {
 };
 
 /** 单个用户响应 */
-type UserResult = {
+export type UserResult = {
   data: UserRecord;
 };
 
@@ -147,4 +150,34 @@ export const updateUser = (id: number, data: UserFormData) => {
 /** 删除用户（软删除） */
 export const deleteUser = (id: number) => {
   return http.request("delete", `/api/v1/users/${id}`);
+};
+
+/** 获取单个用户 */
+export const getUser = (id: number) => {
+  return http.request<UserResult>("get", `/api/v1/users/${id}`);
+};
+
+/** 更新用户状态 */
+export const updateUserStatus = (id: number, status: string) => {
+  return http.request<UserResult>("patch", `/api/v1/users/${id}/status`, {
+    data: { status }
+  });
+};
+
+/** 当前用户信息 */
+export type CurrentUserResult = {
+  data: {
+    id: number;
+    name: string;
+    email: string;
+    phone: string | null;
+    status: "active" | "disabled";
+    roles: string[];
+    created_at: string;
+  };
+};
+
+/** 获取当前用户信息 */
+export const getCurrentUser = () => {
+  return http.request<CurrentUserResult>("get", "/api/v1/me");
 };

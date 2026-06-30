@@ -103,3 +103,15 @@ export const updateMenu = (id: number, data: MenuFormData) => {
 export const deleteMenu = (id: number) => {
   return http.request<MenuResult>("delete", `/api/v1/menus/${id}`);
 };
+
+/** 菜单角色更新参数 */
+export type MenuRoleFormData = {
+  role_ids: number[];
+};
+
+/** 更新菜单关联角色 */
+export const updateMenuRoles = (id: number, data: MenuRoleFormData) => {
+  return http.request<MenuResult>("patch", `/api/v1/menus/${id}/roles`, {
+    data
+  });
+};

@@ -68,14 +68,14 @@ const onLogin = async (formEl: FormInstance | undefined) => {
           }
         })
         .catch(error => {
-          const errData = error?.response?.data?.error;
+          const errData = error?.response?.data?.errors;
           if (errData?.message) {
             let msg = errData.message;
-            if (errData.remainingAttempts != null) {
-              msg += `，剩余尝试次数：${errData.remainingAttempts}`;
+            if (errData.details?.remainingAttempts != null) {
+              msg += `，剩余尝试次数：${errData.details.remainingAttempts}`;
             }
-            if (errData.retryAfter != null) {
-              const mins = Math.ceil(errData.retryAfter / 60);
+            if (errData.details?.retryAfter != null) {
+              const mins = Math.ceil(errData.details.retryAfter / 60);
               msg += `，请${mins}分钟后再试`;
             }
             message(msg, { type: "error" });

@@ -42,16 +42,16 @@ const columns = ref<TableColumns[]>([
     align: "left"
   },
   {
-    label: "图标",
-    prop: "icon",
-    slot: "icon",
-    width: 80,
-    align: "center"
-  },
-  {
     label: "排序",
     prop: "rank",
     width: 70,
+    align: "center"
+  },
+  {
+    label: "菜单类型",
+    prop: "menuType",
+    slot: "menuType",
+    width: 80,
     align: "center"
   },
   {
@@ -381,7 +381,11 @@ onMounted(() => {
             <!-- 菜单名称列 -->
             <template #title="{ row }">
               <span class="menu-name-cell">
-                <span v-if="row.icon" class="mr-2">{{ row.icon }}</span>
+                <IconifyIconOnline
+                  v-if="row.icon"
+                  :icon="row.icon"
+                  class="mr-1"
+                />
                 <span>{{ row.title }}</span>
               </span>
             </template>
@@ -390,6 +394,28 @@ onMounted(() => {
             <template #icon="{ row }">
               <span v-if="row.icon" class="icon-cell">{{ row.icon }}</span>
               <span v-else class="text-gray-400">—</span>
+            </template>
+
+            <!-- 菜单类型列 -->
+            <template #menuType="{ row }">
+              <el-tag
+                :type="
+                  row.menuType === 'M'
+                    ? ''
+                    : row.menuType === 'C'
+                      ? 'success'
+                      : 'warning'
+                "
+                size="small"
+              >
+                {{
+                  row.menuType === "M"
+                    ? "目录"
+                    : row.menuType === "C"
+                      ? "菜单"
+                      : "按钮"
+                }}
+              </el-tag>
             </template>
 
             <!-- 状态列 -->

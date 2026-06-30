@@ -8,7 +8,7 @@ import {
   storageLocal
 } from "../utils";
 import {
-  type UserResult,
+  type LoginSuccessResult,
   type RefreshTokenResult,
   getLogin,
   refreshTokenApi
@@ -65,7 +65,7 @@ export const useUserStore = defineStore("pure-user", {
     },
     /** 登入 */
     async loginByUsername(data) {
-      return new Promise<UserResult>((resolve, reject) => {
+      return new Promise<LoginSuccessResult>((resolve, reject) => {
         getLogin(data)
           .then(res => {
             if (res?.data) setToken(res.data);
@@ -89,7 +89,7 @@ export const useUserStore = defineStore("pure-user", {
     /** 刷新`token` */
     async handRefreshToken(data) {
       return new Promise<RefreshTokenResult>((resolve, reject) => {
-        refreshTokenApi({ refresh_token: data.refreshToken })
+        refreshTokenApi({ refreshToken: data.refreshToken })
           .then(res => {
             if (res?.data) {
               setToken(res.data);
