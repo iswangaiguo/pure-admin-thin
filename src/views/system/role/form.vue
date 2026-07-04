@@ -38,6 +38,21 @@ const editingId = ref<number | null>(null);
 const isEdit = ref(false);
 const dialogTitle = ref("新增角色");
 
+function getLeafIds(tree: any[]): Set<number> {
+  const leafIds = new Set<number>();
+  function traverse(nodes: any[]) {
+    for (const node of nodes) {
+      if (!node.children || node.children.length === 0) {
+        leafIds.add(node.id);
+      } else {
+        traverse(node.children);
+      }
+    }
+  }
+  traverse(tree);
+  return leafIds;
+}
+
 function resetForm() {
   Object.assign(formData, { ...defaultFormData });
   editingId.value = null;
@@ -60,7 +75,11 @@ function initForm() {
     formData.menus = props.editRow.menus || [];
 
     nextTick(() => {
-      treeRef.value?.setCheckedKeys(props.editRow?.menus || []);
+      const leafIds = getLeafIds(props.menuTreeData || []);
+      const leafKeys = (props.editRow?.menus || []).filter(id =>
+        leafIds.has(id)
+      );
+      treeRef.value?.setCheckedKeys(leafKeys);
     });
   } else {
     nextTick(() => {
@@ -95,11 +114,12 @@ async function handleSubmit() {
   submitLoading.value = true;
   try {
     const checkedKeys = treeRef.value?.getCheckedKeys() || [];
+    const halfCheckedKeys = treeRef.value?.getHalfCheckedKeys() || [];
     const data: RoleFormData = {
       code: formData.code,
       name: formData.name,
       isActive: formData.isActive,
-      menus: checkedKeys
+      menus: [...checkedKeys, ...halfCheckedKeys]
     };
 
     if (isEdit.value && editingId.value) {
@@ -148,16 +168,18 @@ async function handleSubmit() {
       <el-form-item label="状态">
         <el-switch v-model="formData.isActive" />
       </el-form-item>
-      <el-form-item label="菜单权限">
-        <el-tree
-          ref="treeRef"
-          :data="menuTreeData"
-          :props="{ label: 'title', children: 'children' }"
-          node-key="id"
-          show-checkbox
-          default-expand-all
-          style="max-height: 300px; overflow-y: auto"
-        />
+      <el-form-item label="菜单权限" class="menu-permission-item">
+        <div class="menu-tree-container">
+          <el-tree
+            ref="treeRef"
+            :data="menuTreeData"
+            :props="{ label: 'title', children: 'children' }"
+            node-key="id"
+            show-checkbox
+            default-expand-all
+            class="menu-tree"
+          />
+        </div>
       </el-form-item>
     </el-form>
     <template #footer>
@@ -182,6 +204,22 @@ async function handleSubmit() {
   :deep(.el-form-item) {
     margin-bottom: 18px;
   }
+}
+
+.menu-permission-item {
+  :deep(.el-form-item__content) {
+    min-width: 0;
+  }
+}
+
+.menu-tree-container {
+  width: 100%;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.menu-tree {
+  width: 100%;
 }
 
 .dialog-footer {
