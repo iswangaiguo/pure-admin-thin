@@ -1,43 +1,26 @@
-<h1>vue-pure-admin精简版（非国际化版本）</h1>
+# Elixadmin Frontend
 
-[![license](https://img.shields.io/github/license/pure-admin/vue-pure-admin.svg)](LICENSE)
+这个目录是 Elixadmin 的前端工作区，基于 `pure-admin-thin` 定制。
 
-**中文** | [English](./README.en-US.md)
+## 运行
 
-## 介绍
+```bash
+pnpm install
+pnpm dev
+```
 
-精简版是基于 [vue-pure-admin](https://github.com/pure-admin/vue-pure-admin) 提炼出的架子，包含主体功能，更适合实际项目开发，打包后的大小在全局引入 [element-plus](https://element-plus.org) 的情况下仍然低于 `2.3MB`，并且会永久同步完整版的代码。开启 `brotli` 压缩和 `cdn` 替换本地库模式后，打包大小低于 `350kb`
+默认开发端口是 `8848`，并将 `/api` 代理到 `http://localhost:4000`。
 
-## 版本选择
+## 常用命令
 
-当前是非国际化版本，如果您需要国际化版本 [请点击](https://github.com/pure-admin/pure-admin-thin/tree/i18n)
+```bash
+pnpm dev
+pnpm typecheck
+pnpm build
+pnpm lint
+```
 
-## 配套视频
+## 说明
 
-[点我查看 UI 设计](https://www.bilibili.com/video/BV17g411T7rq)  
-[点我查看快速开发教程](https://www.bilibili.com/video/BV1kg411v7QT)
-
-## 配套保姆级文档
-
-[点我查看 vue-pure-admin 文档](https://pure-admin.cn/)  
-[点我查看 @pureadmin/utils 文档](https://pure-admin-utils.netlify.app)
-
-## 高级服务
-
-[点我查看详情](https://pure-admin.cn/pages/service/)
-
-## 预览
-
-[查看预览](https://pure-admin-thin.netlify.app/#/login)
-
-## 维护者
-
-[xiaoxian521](https://github.com/xiaoxian521)
-
-## ⚠️ 注意
-
-精简版不接受任何 `issues` 和 `pr`，如果有问题请到完整版 [issues](https://github.com/pure-admin/vue-pure-admin/issues/new/choose) 去提，谢谢！
-
-## 许可证
-
-[MIT © 2020-present, pure-admin](./LICENSE)
+- 完整项目启动方式和默认账号说明见仓库根目录 `README.md`
+- 这个目录保留了 `pure-admin-thin` 的基础结构，但当前功能和接口以 Elixadmin 后端为准
