@@ -4,28 +4,28 @@ import { http } from "@/utils/http";
 export type RoleRecord = {
   id: number;
   /** 角色代码 */
-  key: string;
+  code: string;
   /** 角色名称 */
   name: string;
-  /** 状态 1=启用 0=停用 */
-  status: string;
+  /** 是否启用 */
+  isActive: boolean;
   /** 关联菜单ID列表 */
   menus: number[];
-  created_at?: string;
-  updated_at?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 /** 角色表单数据 */
 export type RoleFormData = {
-  key: string;
+  code: string;
   name: string;
-  status?: string;
+  isActive?: boolean;
   menus?: number[];
 };
 
 /** 角色菜单更新参数 */
 export type RoleMenuFormData = {
-  menu_ids: number[];
+  menuIds: number[];
 };
 
 /** 角色列表响应 */

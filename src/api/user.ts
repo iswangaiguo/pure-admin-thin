@@ -76,19 +76,19 @@ export const refreshTokenApi = (data?: object) => {
 export type UserRecord = {
   id: number;
   /** 用户名 */
-  name: string;
+  username: string;
   /** 邮箱 */
   email: string;
   /** 手机号 */
   phone: string | null;
-  /** 状态：active=正常 disabled=禁用 */
-  status: "active" | "disabled";
+  /** 是否启用 */
+  isActive: boolean;
   /** 角色代码列表 */
   roles: string[];
   /** 最后登录时间 */
-  last_login_at: string | null;
+  lastLoginAt: string | null;
   /** 创建时间 */
-  created_at: string;
+  createdAt: string;
 };
 
 /** 用户表单数据 */
@@ -100,7 +100,7 @@ export type UserFormData = {
   /** 密码（新增时必填，编辑时留空表示不修改） */
   password?: string;
   /** 是否启用 */
-  is_active?: boolean;
+  isActive?: boolean;
   /** 角色代码列表 */
   roles?: string[];
 };
@@ -111,8 +111,8 @@ export type UserListParams = {
   pageSize?: number;
   /** 关键词（搜索用户名或邮箱） */
   keyword?: string;
-  /** 状态过滤 */
-  status?: string;
+  /** 启用状态过滤 */
+  isActive?: boolean | "";
   /** 角色过滤 */
   role?: string;
 };
@@ -127,7 +127,7 @@ type UserPageResult = {
   data: UserRecord[];
   meta: {
     page: number;
-    page_size: number;
+    pageSize: number;
     total: number;
   };
 };
@@ -147,7 +147,7 @@ export const updateUser = (id: number, data: UserFormData) => {
   return http.request<UserResult>("put", `/api/v1/users/${id}`, { data });
 };
 
-/** 删除用户（软删除） */
+/** 删除用户（硬删除） */
 export const deleteUser = (id: number) => {
   return http.request("delete", `/api/v1/users/${id}`);
 };
@@ -158,9 +158,9 @@ export const getUser = (id: number) => {
 };
 
 /** 更新用户状态 */
-export const updateUserStatus = (id: number, status: string) => {
+export const updateUserStatus = (id: number, isActive: boolean) => {
   return http.request<UserResult>("patch", `/api/v1/users/${id}/status`, {
-    data: { status }
+    data: { isActive }
   });
 };
 
@@ -168,12 +168,13 @@ export const updateUserStatus = (id: number, status: string) => {
 export type CurrentUserResult = {
   data: {
     id: number;
-    name: string;
+    username: string;
     email: string;
     phone: string | null;
-    status: "active" | "disabled";
+    isActive: boolean;
     roles: string[];
-    created_at: string;
+    lastLoginAt: string | null;
+    createdAt: string;
   };
 };
 

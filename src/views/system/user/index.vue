@@ -3,16 +3,10 @@ import { ref, reactive, onMounted } from "vue";
 import { PureTableBar } from "@/components/RePureTableBar";
 import { hasAuth } from "@/router/utils";
 import { message } from "@/utils/message";
-import {
-  getUserList,
-  createUser,
-  updateUser,
-  deleteUser,
-  type UserRecord,
-  type UserFormData
-} from "@/api/user";
+import { getUserList, deleteUser, type UserRecord } from "@/api/user";
 import { getRoleList, type RoleRecord } from "@/api/role";
 import type { TableColumns } from "@pureadmin/table";
+import UserForm from "./form.vue";
 
 defineOptions({
   name: "UserManagement"
@@ -24,9 +18,12 @@ const tableRef = ref<any>(null);
 const tableData = ref<UserRecord[]>([]);
 const loading = ref(false);
 
-const searchForm = reactive({
+const searchForm = reactive<{
+  keyword: string;
+  isActive: "" | boolean;
+}>({
   keyword: "",
-  status: ""
+  isActive: ""
 });
 
 const pagination = reactive({
@@ -48,7 +45,7 @@ const columns = ref<TableColumns[]>([
   },
   {
     label: "用户名",
-    prop: "name",
+    prop: "username",
     minWidth: 120
   },
   {
@@ -59,8 +56,8 @@ const columns = ref<TableColumns[]>([
   },
   {
     label: "状态",
-    prop: "status",
-    slot: "status",
+    prop: "isActive",
+    slot: "isActive",
     width: 80,
     align: "center"
   },
@@ -73,7 +70,7 @@ const columns = ref<TableColumns[]>([
   },
   {
     label: "创建时间",
-    prop: "created_at",
+    prop: "createdAt",
     width: 180
   },
   {
@@ -87,21 +84,23 @@ const columns = ref<TableColumns[]>([
 
 // ==================== 对话框表单 ====================
 
-const dialogVisible = ref(false);
-const dialogTitle = ref("");
-const isEdit = ref(false);
-const editingId = ref<number | null>(null);
-const submitLoading = ref(false);
+const formVisible = ref(false);
+const editRow = ref<UserRecord | null>(null);
 
-const defaultFormData: UserFormData = {
-  username: "",
-  email: "",
-  password: "",
-  is_active: true,
-  roles: []
-};
+function openAddDialog() {
+  editRow.value = null;
+  formVisible.value = true;
+}
 
-const formData = reactive<UserFormData>({ ...defaultFormData });
+function openEditDialog(row: UserRecord) {
+  editRow.value = row;
+  formVisible.value = true;
+}
+
+function onFormSuccess() {
+  formVisible.value = false;
+  fetchUsers();
+}
 
 // ==================== API 调用 ====================
 
@@ -113,7 +112,7 @@ async function fetchUsers() {
       pageSize: pagination.pageSize
     };
     if (searchForm.keyword) params.keyword = searchForm.keyword;
-    if (searchForm.status) params.status = searchForm.status;
+    if (searchForm.isActive !== "") params.isActive = searchForm.isActive;
     const res = await getUserList(params);
     tableData.value = res.data || [];
     pagination.total = res.meta?.total || 0;
@@ -133,8 +132,8 @@ async function fetchRoles() {
   }
 }
 
-function getRoleName(key: string): string {
-  return roleOptions.value.find(r => r.key === key)?.name || key;
+function getRoleName(code: string): string {
+  return roleOptions.value.find(r => r.code === code)?.name || code;
 }
 
 // ==================== 搜索操作 ====================
@@ -146,7 +145,7 @@ function handleSearch() {
 
 function handleReset() {
   searchForm.keyword = "";
-  searchForm.status = "";
+  searchForm.isActive = "";
   pagination.page = 1;
   fetchUsers();
 }
@@ -167,79 +166,7 @@ function onRefresh() {
   fetchRoles();
 }
 
-// ==================== 对话框操作 ====================
-
-function resetForm() {
-  Object.assign(formData, { ...defaultFormData });
-  editingId.value = null;
-  isEdit.value = false;
-}
-
-function openAddDialog() {
-  resetForm();
-  dialogTitle.value = "新增用户";
-  dialogVisible.value = true;
-}
-
-function openEditDialog(row: UserRecord) {
-  resetForm();
-  editingId.value = row.id;
-  isEdit.value = true;
-  dialogTitle.value = "修改用户";
-
-  formData.username = row.name;
-  formData.email = row.email;
-  formData.password = "";
-  formData.is_active = row.status === "active";
-  formData.roles = row.roles || [];
-
-  dialogVisible.value = true;
-}
-
-function handleCloseDialog() {
-  dialogVisible.value = false;
-}
-
-async function handleSubmitForm() {
-  if (!formData.username) {
-    message("请输入用户名", { type: "warning" });
-    return;
-  }
-  if (!formData.email) {
-    message("请输入邮箱", { type: "warning" });
-    return;
-  }
-  if (!isEdit.value && !formData.password) {
-    message("请输入密码", { type: "warning" });
-    return;
-  }
-
-  submitLoading.value = true;
-  try {
-    const data: UserFormData = {
-      username: formData.username,
-      email: formData.email,
-      is_active: formData.is_active,
-      roles: formData.roles
-    };
-    if (formData.password) {
-      data.password = formData.password;
-    }
-    if (isEdit.value && editingId.value) {
-      await updateUser(editingId.value, data);
-      message("修改成功", { type: "success" });
-    } else {
-      await createUser(data);
-      message("新增成功", { type: "success" });
-    }
-    dialogVisible.value = false;
-    fetchUsers();
-  } catch {
-    message(isEdit.value ? "修改失败" : "新增失败", { type: "error" });
-  } finally {
-    submitLoading.value = false;
-  }
-}
+// ==================== 删除操作 ====================
 
 async function handleDelete(row: UserRecord) {
   try {
@@ -277,14 +204,14 @@ onMounted(() => {
         </el-form-item>
         <el-form-item label="状态">
           <el-select
-            v-model="searchForm.status"
+            v-model="searchForm.isActive"
             placeholder="用户状态"
             clearable
             style="width: 140px"
           >
             <el-option label="全部" value="" />
-            <el-option label="正常" value="active" />
-            <el-option label="禁用" value="disabled" />
+            <el-option label="正常" :value="true" />
+            <el-option label="禁用" :value="false" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -303,7 +230,6 @@ onMounted(() => {
     <!-- 表格区域 -->
     <el-card shadow="never" class="table-card">
       <PureTableBar
-        title="用户管理"
         :table-ref="tableRef"
         :columns="columns"
         @refresh="onRefresh"
@@ -329,12 +255,9 @@ onMounted(() => {
             :loading="loading"
             border
           >
-            <template #status="{ row }">
-              <el-tag
-                :type="row.status === 'active' ? 'success' : 'danger'"
-                size="small"
-              >
-                {{ row.status === "active" ? "正常" : "禁用" }}
+            <template #isActive="{ row }">
+              <el-tag :type="row.isActive ? 'success' : 'danger'" size="small">
+                {{ row.isActive ? "正常" : "禁用" }}
               </el-tag>
             </template>
             <template #role="{ row }">
@@ -362,7 +285,7 @@ onMounted(() => {
               </el-button>
               <el-popconfirm
                 v-if="hasAuth('user:delete')"
-                :title="'是否确认删除用户【' + row.name + '】？'"
+                :title="'是否确认删除用户【' + row.username + '】？'"
                 @confirm="handleDelete(row)"
               >
                 <template #reference>
@@ -387,86 +310,21 @@ onMounted(() => {
       </div>
     </el-card>
 
-    <!-- 新增/编辑对话框 -->
-    <el-dialog
-      v-model="dialogVisible"
-      :title="dialogTitle"
-      width="520px"
-      :close-on-click-modal="false"
-      destroy-on-close
-      @close="handleCloseDialog"
-    >
-      <el-form :model="formData" label-width="80px" class="user-form">
-        <el-form-item label="用户名">
-          <el-input
-            v-model="formData.username"
-            placeholder="请输入用户名"
-            maxlength="50"
-          />
-        </el-form-item>
-        <el-form-item label="邮箱">
-          <el-input
-            v-model="formData.email"
-            placeholder="请输入邮箱"
-            maxlength="100"
-          />
-        </el-form-item>
-        <el-form-item label="密码">
-          <el-input
-            v-model="formData.password"
-            type="password"
-            :placeholder="isEdit ? '留空则不修改密码' : '请输入密码'"
-            maxlength="50"
-            show-password
-          />
-        </el-form-item>
-        <el-form-item label="状态">
-          <el-radio-group v-model="formData.is_active">
-            <el-radio :value="true">正常</el-radio>
-            <el-radio :value="false">禁用</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="角色">
-          <el-select
-            v-model="formData.roles"
-            multiple
-            placeholder="请选择角色"
-            clearable
-            style="width: 100%"
-            collapse-tags
-            collapse-tags-tooltip
-          >
-            <el-option
-              v-for="item in roleOptions"
-              :key="item.key"
-              :label="item.name"
-              :value="item.key"
-            />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <div class="dialog-footer">
-          <el-button @click="dialogVisible = false">取 消</el-button>
-          <el-button
-            type="primary"
-            :loading="submitLoading"
-            @click="handleSubmitForm"
-          >
-            确 定
-          </el-button>
-        </div>
-      </template>
-    </el-dialog>
+    <UserForm
+      v-model:visible="formVisible"
+      :role-options="roleOptions"
+      :edit-row="editRow"
+      @success="onFormSuccess"
+    />
   </div>
 </template>
 
 <style scoped lang="scss">
 .user-container {
-  padding: 16px;
+  padding: 8px;
 
   .search-card {
-    margin-bottom: 16px;
+    margin-bottom: 8px;
 
     .search-form {
       :deep(.el-form-item) {
@@ -482,19 +340,5 @@ onMounted(() => {
       margin-top: 16px;
     }
   }
-}
-
-.user-form {
-  padding: 10px 20px 0;
-
-  :deep(.el-form-item) {
-    margin-bottom: 18px;
-  }
-}
-
-.dialog-footer {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
 }
 </style>

@@ -1,19 +1,16 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from "vue";
+import { ref, reactive, onMounted } from "vue";
 import { PureTableBar } from "@/components/RePureTableBar";
 import { hasAuth } from "@/router/utils";
 import { message } from "@/utils/message";
 import {
   getMenuTree,
   getMenuTreeSelect,
-  createMenu,
-  updateMenu,
   deleteMenu,
-  type MenuRecord,
-  type MenuFormData
+  type MenuRecord
 } from "@/api/menu";
 import type { TableColumns } from "@pureadmin/table";
-import { cloneDeep } from "@pureadmin/utils";
+import MenuForm from "./form.vue";
 
 defineOptions({
   name: "MenuManagement"
@@ -24,8 +21,6 @@ defineOptions({
 const tableRef = ref<any>(null);
 const tableData = ref<MenuRecord[]>([]);
 const loading = ref(false);
-const isExpandAll = ref(true);
-
 const searchForm = reactive({
   title: "",
   isActive: ""
@@ -42,16 +37,10 @@ const columns = ref<TableColumns[]>([
     align: "left"
   },
   {
-    label: "排序",
-    prop: "rank",
-    width: 70,
-    align: "center"
-  },
-  {
     label: "菜单类型",
     prop: "menuType",
     slot: "menuType",
-    width: 80,
+    minWidth: 50,
     align: "center"
   },
   {
@@ -65,6 +54,12 @@ const columns = ref<TableColumns[]>([
     prop: "component",
     minWidth: 180,
     showOverflowTooltip: true
+  },
+  {
+    label: "排序",
+    prop: "rank",
+    width: 70,
+    align: "center"
   },
   {
     label: "状态",
@@ -84,47 +79,30 @@ const columns = ref<TableColumns[]>([
 
 // ==================== 对话框表单 ====================
 
-const dialogVisible = ref(false);
-const dialogTitle = ref("");
-const isEdit = ref(false);
-const editingId = ref<number | null>(null);
-const submitLoading = ref(false);
+const formVisible = ref(false);
+const editRow = ref<MenuRecord | null>(null);
+const parentRow = ref<MenuRecord | null>(null);
 
-const defaultFormData: MenuFormData = {
-  parentId: null,
-  menuType: "M",
-  title: "",
-  name: "",
-  path: "",
-  component: "",
-  icon: "",
-  rank: 0,
-  showLink: true,
-  perms: "",
-  isActive: true,
-  visible: true
-};
+function openAddDialog(parent?: MenuRecord) {
+  editRow.value = null;
+  parentRow.value = parent || null;
+  formVisible.value = true;
+}
 
-const formData = reactive<MenuFormData>({ ...defaultFormData });
+function openEditDialog(row: MenuRecord) {
+  editRow.value = row;
+  parentRow.value = null;
+  formVisible.value = true;
+}
+
+function onFormSuccess() {
+  formVisible.value = false;
+  fetchMenuTree();
+  fetchTreeSelect();
+}
 
 /** 上级菜单树数据 */
 const treeSelectData = ref<any[]>([]);
-
-/** 格式化 tree-select 标签 */
-function formatTreeLabel(nodes: any[], prefix = ""): any[] {
-  return nodes.map(node => {
-    const label = prefix ? `${prefix} / ${node.label}` : node.label;
-    return {
-      ...node,
-      label,
-      children: node.children ? formatTreeLabel(node.children, label) : []
-    };
-  });
-}
-
-const formattedTreeSelect = computed(() => {
-  return formatTreeLabel(cloneDeep(treeSelectData.value));
-});
 
 // ==================== API 调用 ====================
 
@@ -152,85 +130,7 @@ async function fetchTreeSelect() {
   }
 }
 
-// ==================== 对话框操作 ====================
-
-function resetForm() {
-  Object.assign(formData, cloneDeep(defaultFormData));
-  editingId.value = null;
-  isEdit.value = false;
-}
-
-function openAddDialog(parent?: MenuRecord) {
-  resetForm();
-  if (parent) {
-    formData.parentId = parent.id;
-    // 目录下默认新建菜单，菜单下默认新建按钮
-    formData.menuType = parent.menuType === "M" ? "C" : "F";
-  }
-  dialogTitle.value = "新增菜单";
-  dialogVisible.value = true;
-}
-
-function openEditDialog(row: MenuRecord) {
-  resetForm();
-  editingId.value = row.id;
-  isEdit.value = true;
-  dialogTitle.value = "修改菜单";
-
-  formData.parentId = row.parentId;
-  formData.menuType = row.menuType;
-  formData.title = row.title;
-  formData.name = row.name || "";
-  formData.path = row.path;
-  formData.component = row.component || "";
-  formData.icon = row.icon || "";
-  formData.rank = row.rank;
-  formData.showLink = row.showLink;
-  formData.perms = row.perms || "";
-  formData.isActive = row.isActive;
-  formData.visible = row.visible;
-
-  dialogVisible.value = true;
-}
-
-function handleCloseDialog() {
-  dialogVisible.value = false;
-}
-
-async function handleSubmitForm() {
-  // 表单验证
-  if (!formData.title) {
-    message("请输入菜单名称", { type: "warning" });
-    return;
-  }
-  if (formData.menuType !== "F" && !formData.path) {
-    message("请输入路由地址", { type: "warning" });
-    return;
-  }
-  if (formData.menuType === "C" && !formData.component) {
-    message("请输入组件路径", { type: "warning" });
-    return;
-  }
-
-  submitLoading.value = true;
-  try {
-    const data = { ...formData };
-    if (isEdit.value && editingId.value) {
-      await updateMenu(editingId.value, data);
-      message("修改成功", { type: "success" });
-    } else {
-      await createMenu(data);
-      message("新增成功", { type: "success" });
-    }
-    dialogVisible.value = false;
-    fetchMenuTree();
-    fetchTreeSelect();
-  } catch {
-    message(isEdit.value ? "修改失败" : "新增失败", { type: "error" });
-  } finally {
-    submitLoading.value = false;
-  }
-}
+// ==================== 删除操作 ====================
 
 async function handleDelete(row: MenuRecord) {
   try {
@@ -255,46 +155,10 @@ function handleReset() {
   fetchMenuTree();
 }
 
-function toggleExpandAll() {
-  if (!tableRef.value) return;
-  const rows = tableData.value;
-  isExpandAll.value = !isExpandAll.value;
-  toggleRows(rows, isExpandAll.value);
-}
-
-function toggleRows(data: any[], expanded: boolean) {
-  data.forEach(row => {
-    tableRef.value?.toggleRowExpansion(row, expanded);
-    if (row.children && row.children.length > 0) {
-      toggleRows(row.children, expanded);
-    }
-  });
-}
-
 function onRefresh() {
   fetchMenuTree();
   fetchTreeSelect();
 }
-
-// ==================== 图标选项 ====================
-
-const iconOptions = [
-  { label: "系统管理 (setting)", value: "ep:setting" },
-  { label: "用户 (user)", value: "ep:user" },
-  { label: "角色 (avatar)", value: "ep:avatar" },
-  { label: "菜单 (menu)", value: "ep:menu" },
-  { label: "权限 (lock)", value: "ep:lock" },
-  { label: "文档 (document)", value: "ep:document" },
-  { label: "链接 (link)", value: "ep:link" },
-  { label: "图表 (data-analysis)", value: "ep:data-analysis" },
-  { label: "日志 (notebook)", value: "ep:notebook" },
-  { label: "监控 (monitor)", value: "ep:monitor" },
-  { label: "工具 (tool)", value: "ep:tool" },
-  { label: "示例 (lollipop)", value: "ep:lollipop" },
-  { label: "首页 (home-filled)", value: "ep:home-filled" },
-  { label: "日历 (calendar)", value: "ep:calendar" },
-  { label: "消息 (bell)", value: "ep:bell" }
-];
 
 // ==================== 生命周期 ====================
 
@@ -344,10 +208,8 @@ onMounted(() => {
     <!-- 表格区域 -->
     <el-card shadow="never" class="table-card">
       <PureTableBar
-        title="菜单管理"
-        :table-ref="tableRef"
+        :table-ref="tableRef?.getTableRef()"
         :columns="columns"
-        :is-expand-all="isExpandAll"
         @refresh="onRefresh"
       >
         <template #buttons>
@@ -359,10 +221,6 @@ onMounted(() => {
             <IconifyIconOnline icon="ep:plus" />
             新增
           </el-button>
-          <el-button @click="toggleExpandAll">
-            <IconifyIconOnline :icon="isExpandAll ? 'ep:fold' : 'ep:expand'" />
-            {{ isExpandAll ? "折叠全部" : "展开全部" }}
-          </el-button>
         </template>
 
         <template #default="{ size, dynamicColumns }">
@@ -372,7 +230,11 @@ onMounted(() => {
             :columns="dynamicColumns"
             :size="size"
             row-key="id"
-            :tree-props="{ children: 'children' }"
+            :tree-props="{
+              children: 'children',
+              hasChildren: 'hasChildren',
+              checkStrictly: false
+            }"
             :default-expand-all="true"
             :loading="loading"
             border
@@ -401,7 +263,7 @@ onMounted(() => {
               <el-tag
                 :type="
                   row.menuType === 'M'
-                    ? ''
+                    ? 'info'
                     : row.menuType === 'C'
                       ? 'success'
                       : 'warning'
@@ -460,141 +322,22 @@ onMounted(() => {
       </PureTableBar>
     </el-card>
 
-    <!-- 新增/编辑对话框 -->
-    <el-dialog
-      v-model="dialogVisible"
-      :title="dialogTitle"
-      width="650px"
-      :close-on-click-modal="false"
-      destroy-on-close
-      @close="handleCloseDialog"
-    >
-      <el-form :model="formData" label-width="100px" class="menu-form">
-        <!-- 上级菜单 -->
-        <el-form-item label="上级菜单">
-          <el-tree-select
-            v-model="formData.parentId"
-            :data="formattedTreeSelect"
-            :props="{ value: 'id', label: 'label', children: 'children' }"
-            placeholder="顶级菜单（留空）"
-            clearable
-            check-strictly
-            style="width: 100%"
-          />
-        </el-form-item>
-
-        <!-- 菜单类型 -->
-        <el-form-item label="菜单类型">
-          <el-radio-group v-model="formData.menuType" :disabled="isEdit">
-            <el-radio-button value="M">目录</el-radio-button>
-            <el-radio-button value="C">菜单</el-radio-button>
-            <el-radio-button value="F">按钮</el-radio-button>
-          </el-radio-group>
-        </el-form-item>
-
-        <!-- 菜单名称（必填） -->
-        <el-form-item label="菜单名称">
-          <el-input
-            v-model="formData.title"
-            placeholder="请输入菜单名称"
-            maxlength="50"
-          />
-        </el-form-item>
-
-        <!-- 路由地址（目录和菜单显示） -->
-        <el-form-item v-if="formData.menuType !== 'F'" label="路由地址">
-          <el-input
-            v-model="formData.path"
-            :placeholder="
-              formData.menuType === 'M'
-                ? '目录路径，如 /system'
-                : '路由路径，如 system/user'
-            "
-          />
-        </el-form-item>
-
-        <!-- 组件路径（仅菜单显示） -->
-        <el-form-item v-if="formData.menuType === 'C'" label="组件路径">
-          <el-input
-            v-model="formData.component"
-            placeholder="如 system/user/index"
-          />
-        </el-form-item>
-
-        <!-- 权限标识（菜单和按钮显示） -->
-        <el-form-item v-if="formData.menuType !== 'M'" label="权限标识">
-          <el-input
-            v-model="formData.perms"
-            :placeholder="
-              formData.menuType === 'C' ? '如 user:list' : '如 user:create'
-            "
-          />
-        </el-form-item>
-
-        <!-- 菜单图标（目录和菜单显示） -->
-        <el-form-item v-if="formData.menuType !== 'F'" label="菜单图标">
-          <el-select
-            v-model="formData.icon"
-            placeholder="选择图标"
-            clearable
-            filterable
-            allow-create
-            style="width: 100%"
-          >
-            <el-option
-              v-for="opt in iconOptions"
-              :key="opt.value"
-              :label="opt.label"
-              :value="opt.value"
-            />
-          </el-select>
-        </el-form-item>
-
-        <!-- 显示排序 -->
-        <el-form-item label="显示排序">
-          <el-input-number v-model="formData.rank" :min="0" :max="999" />
-        </el-form-item>
-
-        <!-- 显示状态（目录和菜单显示） -->
-        <el-form-item v-if="formData.menuType !== 'F'" label="显示状态">
-          <el-radio-group v-model="formData.visible">
-            <el-radio :value="true">显示</el-radio>
-            <el-radio :value="false">隐藏</el-radio>
-          </el-radio-group>
-        </el-form-item>
-
-        <!-- 菜单状态 -->
-        <el-form-item label="菜单状态">
-          <el-switch
-            v-model="formData.isActive"
-            active-text="启用"
-            inactive-text="停用"
-          />
-        </el-form-item>
-      </el-form>
-
-      <template #footer>
-        <div class="dialog-footer">
-          <el-button @click="dialogVisible = false">取 消</el-button>
-          <el-button
-            type="primary"
-            :loading="submitLoading"
-            @click="handleSubmitForm"
-          >
-            确 定
-          </el-button>
-        </div>
-      </template>
-    </el-dialog>
+    <MenuForm
+      v-model:visible="formVisible"
+      :tree-select-data="treeSelectData"
+      :edit-row="editRow"
+      :parent-row="parentRow"
+      @success="onFormSuccess"
+    />
   </div>
 </template>
 
 <style scoped lang="scss">
 .menu-container {
-  padding: 16px;
+  padding: 8px;
 
   .search-card {
-    margin-bottom: 16px;
+    margin-bottom: 8px;
 
     .search-form {
       :deep(.el-form-item) {
@@ -620,21 +363,5 @@ onMounted(() => {
 
 .icon-cell {
   font-size: 16px;
-}
-
-.menu-form {
-  max-height: 55vh;
-  padding: 10px 20px 0;
-  overflow-y: auto;
-
-  :deep(.el-form-item) {
-    margin-bottom: 18px;
-  }
-}
-
-.dialog-footer {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
 }
 </style>

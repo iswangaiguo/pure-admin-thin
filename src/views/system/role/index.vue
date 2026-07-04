@@ -1,18 +1,12 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick } from "vue";
+import { ref, reactive, onMounted } from "vue";
 import { PureTableBar } from "@/components/RePureTableBar";
 import { hasAuth } from "@/router/utils";
 import { message } from "@/utils/message";
-import {
-  getRoleList,
-  createRole,
-  updateRole,
-  deleteRole,
-  type RoleRecord,
-  type RoleFormData
-} from "@/api/role";
+import { getRoleList, deleteRole, type RoleRecord } from "@/api/role";
 import { getMenuTree, type MenuRecord } from "@/api/menu";
 import type { TableColumns } from "@pureadmin/table";
+import RoleForm from "./form.vue";
 
 defineOptions({
   name: "RoleManagement"
@@ -23,7 +17,6 @@ defineOptions({
 const tableRef = ref<any>(null);
 const tableData = ref<RoleRecord[]>([]);
 const loading = ref(false);
-const treeRef = ref<any>(null);
 
 const searchForm = reactive({
   keyword: ""
@@ -40,7 +33,7 @@ const columns = ref<TableColumns[]>([
   },
   {
     label: "角色标识",
-    prop: "key",
+    prop: "code",
     minWidth: 120
   },
   {
@@ -50,14 +43,14 @@ const columns = ref<TableColumns[]>([
   },
   {
     label: "状态",
-    prop: "status",
-    slot: "status",
+    prop: "isActive",
+    slot: "isActive",
     width: 80,
     align: "center"
   },
   {
     label: "创建时间",
-    prop: "created_at",
+    prop: "createdAt",
     width: 180
   },
   {
@@ -71,20 +64,23 @@ const columns = ref<TableColumns[]>([
 
 // ==================== 对话框表单 ====================
 
-const dialogVisible = ref(false);
-const dialogTitle = ref("");
-const isEdit = ref(false);
-const editingId = ref<number | null>(null);
-const submitLoading = ref(false);
+const formVisible = ref(false);
+const editRow = ref<RoleRecord | null>(null);
 
-const defaultFormData: RoleFormData = {
-  key: "",
-  name: "",
-  status: "1",
-  menus: []
-};
+function openAddDialog() {
+  editRow.value = null;
+  formVisible.value = true;
+}
 
-const formData = reactive<RoleFormData>({ ...defaultFormData });
+function openEditDialog(row: RoleRecord) {
+  editRow.value = row;
+  formVisible.value = true;
+}
+
+function onFormSuccess() {
+  formVisible.value = false;
+  fetchRoles();
+}
 
 /** 菜单树数据 */
 const menuTreeData = ref<MenuRecord[]>([]);
@@ -99,7 +95,7 @@ async function fetchRoles() {
       if (!searchForm.keyword) return true;
       const kw = searchForm.keyword.toLowerCase();
       return (
-        row.key.toLowerCase().includes(kw) ||
+        row.code.toLowerCase().includes(kw) ||
         row.name.toLowerCase().includes(kw)
       );
     });
@@ -119,80 +115,7 @@ async function fetchMenuTree() {
   }
 }
 
-// ==================== 对话框操作 ====================
-
-function resetForm() {
-  Object.assign(formData, { ...defaultFormData });
-  editingId.value = null;
-  isEdit.value = false;
-  treeRef.value?.setCheckedKeys([]);
-}
-
-function openAddDialog() {
-  resetForm();
-  dialogTitle.value = "新增角色";
-  dialogVisible.value = true;
-  nextTick(() => {
-    treeRef.value?.setCheckedKeys([]);
-  });
-}
-
-function openEditDialog(row: RoleRecord) {
-  resetForm();
-  editingId.value = row.id;
-  isEdit.value = true;
-  dialogTitle.value = "修改角色";
-
-  formData.key = row.key;
-  formData.name = row.name;
-  formData.status = row.status;
-  formData.menus = row.menus || [];
-
-  dialogVisible.value = true;
-  nextTick(() => {
-    treeRef.value?.setCheckedKeys(row.menus || []);
-  });
-}
-
-function handleCloseDialog() {
-  dialogVisible.value = false;
-}
-
-async function handleSubmitForm() {
-  if (!formData.key) {
-    message("请输入角色标识", { type: "warning" });
-    return;
-  }
-  if (!formData.name) {
-    message("请输入角色名称", { type: "warning" });
-    return;
-  }
-
-  submitLoading.value = true;
-  try {
-    const checkedKeys = treeRef.value?.getCheckedKeys() || [];
-    const data: RoleFormData = {
-      key: formData.key,
-      name: formData.name,
-      status: formData.status,
-      menus: checkedKeys
-    };
-
-    if (isEdit.value && editingId.value) {
-      await updateRole(editingId.value, data);
-      message("修改成功", { type: "success" });
-    } else {
-      await createRole(data);
-      message("新增成功", { type: "success" });
-    }
-    dialogVisible.value = false;
-    fetchRoles();
-  } catch {
-    message(isEdit.value ? "修改失败" : "新增失败", { type: "error" });
-  } finally {
-    submitLoading.value = false;
-  }
-}
+// ==================== 删除操作 ====================
 
 async function handleDelete(row: RoleRecord) {
   try {
@@ -257,7 +180,6 @@ onMounted(() => {
     <!-- 表格区域 -->
     <el-card shadow="never" class="table-card">
       <PureTableBar
-        title="角色管理"
         :table-ref="tableRef"
         :columns="columns"
         @refresh="onRefresh"
@@ -283,12 +205,9 @@ onMounted(() => {
             :loading="loading"
             border
           >
-            <template #status="{ row }">
-              <el-tag
-                :type="row.status === '1' ? 'success' : 'danger'"
-                size="small"
-              >
-                {{ row.status === "1" ? "正常" : "停用" }}
+            <template #isActive="{ row }">
+              <el-tag :type="row.isActive ? 'success' : 'danger'" size="small">
+                {{ row.isActive ? "正常" : "停用" }}
               </el-tag>
             </template>
             <template #operation="{ row }">
@@ -316,74 +235,21 @@ onMounted(() => {
       </PureTableBar>
     </el-card>
 
-    <!-- 新增/编辑对话框 -->
-    <el-dialog
-      v-model="dialogVisible"
-      :title="dialogTitle"
-      width="600px"
-      :close-on-click-modal="false"
-      destroy-on-close
-      @close="handleCloseDialog"
-    >
-      <el-form :model="formData" label-width="80px" class="role-form">
-        <el-form-item label="角色标识">
-          <el-input
-            v-model="formData.key"
-            placeholder="请输入角色标识，如 admin"
-            :disabled="isEdit"
-            maxlength="50"
-          />
-        </el-form-item>
-        <el-form-item label="角色名称">
-          <el-input
-            v-model="formData.name"
-            placeholder="请输入角色名称"
-            maxlength="50"
-          />
-        </el-form-item>
-        <el-form-item label="状态">
-          <el-switch
-            v-model="formData.status"
-            active-value="1"
-            inactive-value="0"
-            active-text="启用"
-            inactive-text="停用"
-          />
-        </el-form-item>
-        <el-form-item label="菜单权限">
-          <el-tree
-            ref="treeRef"
-            :data="menuTreeData"
-            :props="{ label: 'title', children: 'children' }"
-            node-key="id"
-            show-checkbox
-            default-expand-all
-            style="max-height: 300px; overflow-y: auto"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <div class="dialog-footer">
-          <el-button @click="dialogVisible = false">取 消</el-button>
-          <el-button
-            type="primary"
-            :loading="submitLoading"
-            @click="handleSubmitForm"
-          >
-            确 定
-          </el-button>
-        </div>
-      </template>
-    </el-dialog>
+    <RoleForm
+      v-model:visible="formVisible"
+      :menu-tree-data="menuTreeData"
+      :edit-row="editRow"
+      @success="onFormSuccess"
+    />
   </div>
 </template>
 
 <style scoped lang="scss">
 .role-container {
-  padding: 16px;
+  padding: 8px;
 
   .search-card {
-    margin-bottom: 16px;
+    margin-bottom: 8px;
 
     .search-form {
       :deep(.el-form-item) {
@@ -391,19 +257,5 @@ onMounted(() => {
       }
     }
   }
-}
-
-.role-form {
-  padding: 10px 20px 0;
-
-  :deep(.el-form-item) {
-    margin-bottom: 18px;
-  }
-}
-
-.dialog-footer {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
 }
 </style>

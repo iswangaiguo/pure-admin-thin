@@ -12,7 +12,8 @@ import { subBefore, getQueryMap } from "@pureadmin/utils";
  */
 (function () {
   // 获取 url 中的参数
-  const params = getQueryMap(location.href) as DataInfo<Date>;
+  const params = getQueryMap(location.href) as unknown as DataInfo<number> &
+    Record<string, unknown>;
   const must = ["username", "roles", "accessToken"];
   const mustLength = must.length;
   if (Object.keys(params).length !== mustLength) return;
