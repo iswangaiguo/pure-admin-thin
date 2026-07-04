@@ -23,7 +23,7 @@ const tableData = ref<MenuRecord[]>([]);
 const loading = ref(false);
 const searchForm = reactive({
   title: "",
-  isActive: ""
+  status: ""
 });
 
 // ==================== 表格列定义 ====================
@@ -63,8 +63,8 @@ const columns = ref<TableColumns[]>([
   },
   {
     label: "状态",
-    prop: "isActive",
-    slot: "isActive",
+    prop: "status",
+    slot: "status",
     width: 80,
     align: "center"
   },
@@ -111,7 +111,7 @@ async function fetchMenuTree() {
   try {
     const params: Record<string, string> = {};
     if (searchForm.title) params.title = searchForm.title;
-    if (searchForm.isActive) params.isActive = searchForm.isActive;
+    if (searchForm.status) params.status = searchForm.status;
     const res = await getMenuTree(params);
     tableData.value = res.data || [];
   } catch {
@@ -151,7 +151,7 @@ function handleSearch() {
 
 function handleReset() {
   searchForm.title = "";
-  searchForm.isActive = "";
+  searchForm.status = "";
   fetchMenuTree();
 }
 
@@ -183,7 +183,7 @@ onMounted(() => {
         </el-form-item>
         <el-form-item label="状态">
           <el-select
-            v-model="searchForm.isActive"
+            v-model="searchForm.status"
             placeholder="菜单状态"
             clearable
             style="width: 140px"
@@ -281,9 +281,9 @@ onMounted(() => {
             </template>
 
             <!-- 状态列 -->
-            <template #isActive="{ row }">
-              <el-tag :type="row.isActive ? 'success' : 'danger'" size="small">
-                {{ row.isActive ? "正常" : "停用" }}
+            <template #status="{ row }">
+              <el-tag :type="row.status ? 'success' : 'danger'" size="small">
+                {{ row.status ? "正常" : "停用" }}
               </el-tag>
             </template>
 

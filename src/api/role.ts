@@ -8,7 +8,7 @@ export type RoleRecord = {
   /** 角色名称 */
   name: string;
   /** 是否启用 */
-  isActive: boolean;
+  status: boolean;
   /** 关联菜单ID列表 */
   menus: number[];
   createdAt?: string;
@@ -19,7 +19,7 @@ export type RoleRecord = {
 export type RoleFormData = {
   code: string;
   name: string;
-  isActive?: boolean;
+  status?: boolean;
   menus?: number[];
 };
 

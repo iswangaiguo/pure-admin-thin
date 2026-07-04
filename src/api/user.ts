@@ -82,7 +82,7 @@ export type UserRecord = {
   /** 手机号 */
   phone: string | null;
   /** 是否启用 */
-  isActive: boolean;
+  status: boolean;
   /** 角色代码列表 */
   roles: string[];
   /** 最后登录时间 */
@@ -100,7 +100,7 @@ export type UserFormData = {
   /** 密码（新增时必填，编辑时留空表示不修改） */
   password?: string;
   /** 是否启用 */
-  isActive?: boolean;
+  status?: boolean;
   /** 角色代码列表 */
   roles?: string[];
 };
@@ -112,7 +112,7 @@ export type UserListParams = {
   /** 关键词（搜索用户名或邮箱） */
   keyword?: string;
   /** 启用状态过滤 */
-  isActive?: boolean | "";
+  status?: boolean | "";
   /** 角色过滤 */
   role?: string;
 };
@@ -158,9 +158,9 @@ export const getUser = (id: number) => {
 };
 
 /** 更新用户状态 */
-export const updateUserStatus = (id: number, isActive: boolean) => {
+export const updateUserStatus = (id: number, status: boolean) => {
   return http.request<UserResult>("patch", `/api/v1/users/${id}/status`, {
-    data: { isActive }
+    data: { status }
   });
 };
 
@@ -171,7 +171,7 @@ export type CurrentUserResult = {
     username: string;
     email: string;
     phone: string | null;
-    isActive: boolean;
+    status: boolean;
     roles: string[];
     lastLoginAt: string | null;
     createdAt: string;

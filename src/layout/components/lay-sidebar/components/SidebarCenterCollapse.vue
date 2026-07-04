@@ -6,11 +6,11 @@ import { useNav } from "@/layout/hooks/useNav";
 import ArrowLeft from "~icons/ri/arrow-left-double-fill";
 
 interface Props {
-  isActive?: boolean;
+  status?: boolean;
 }
 
 withDefaults(defineProps<Props>(), {
-  isActive: false
+  status: false
 });
 
 const { tooltipEffect } = useNav();
@@ -34,7 +34,7 @@ const toggleClick = () => {
 <template>
   <div
     v-tippy="{
-      content: isActive ? '点击折叠' : '点击展开',
+      content: status ? '点击折叠' : '点击展开',
       theme: tooltipEffect,
       hideOnClick: 'toggle',
       placement: 'right'
@@ -45,7 +45,7 @@ const toggleClick = () => {
     <IconifyIconOffline
       :icon="ArrowLeft"
       :class="[iconClass, themeColor === 'light' ? '' : 'text-primary']"
-      :style="{ transform: isActive ? 'none' : 'rotateY(180deg)' }"
+      :style="{ transform: status ? 'none' : 'rotateY(180deg)' }"
     />
   </div>
 </template>

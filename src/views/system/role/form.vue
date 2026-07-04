@@ -29,7 +29,7 @@ const submitLoading = ref(false);
 const defaultFormData: RoleFormData = {
   code: "",
   name: "",
-  isActive: true,
+  status: true,
   menus: []
 };
 
@@ -71,7 +71,7 @@ function initForm() {
 
     formData.code = props.editRow.code;
     formData.name = props.editRow.name;
-    formData.isActive = props.editRow.isActive;
+    formData.status = props.editRow.status;
     formData.menus = props.editRow.menus || [];
 
     nextTick(() => {
@@ -118,7 +118,7 @@ async function handleSubmit() {
     const data: RoleFormData = {
       code: formData.code,
       name: formData.name,
-      isActive: formData.isActive,
+      status: formData.status,
       menus: [...checkedKeys, ...halfCheckedKeys]
     };
 
@@ -166,7 +166,7 @@ async function handleSubmit() {
         />
       </el-form-item>
       <el-form-item label="状态">
-        <el-switch v-model="formData.isActive" />
+        <el-switch v-model="formData.status" />
       </el-form-item>
       <el-form-item label="菜单权限" class="menu-permission-item">
         <div class="menu-tree-container">

@@ -29,7 +29,7 @@ const defaultFormData: UserFormData = {
   username: "",
   email: "",
   password: "",
-  isActive: true,
+  status: true,
   roles: []
 };
 
@@ -56,7 +56,7 @@ function initForm() {
     formData.username = props.editRow.username;
     formData.email = props.editRow.email;
     formData.password = "";
-    formData.isActive = props.editRow.isActive;
+    formData.status = props.editRow.status;
     formData.roles = props.editRow.roles || [];
   }
 }
@@ -93,7 +93,7 @@ async function handleSubmit() {
     const data: UserFormData = {
       username: formData.username,
       email: formData.email,
-      isActive: formData.isActive,
+      status: formData.status,
       roles: formData.roles
     };
     if (formData.password) {
@@ -151,7 +151,7 @@ async function handleSubmit() {
         />
       </el-form-item>
       <el-form-item label="状态">
-        <el-radio-group v-model="formData.isActive">
+        <el-radio-group v-model="formData.status">
           <el-radio :value="true">正常</el-radio>
           <el-radio :value="false">禁用</el-radio>
         </el-radio-group>

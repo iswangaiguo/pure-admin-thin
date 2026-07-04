@@ -43,8 +43,8 @@ const columns = ref<TableColumns[]>([
   },
   {
     label: "状态",
-    prop: "isActive",
-    slot: "isActive",
+    prop: "status",
+    slot: "status",
     width: 80,
     align: "center"
   },
@@ -205,9 +205,9 @@ onMounted(() => {
             :loading="loading"
             border
           >
-            <template #isActive="{ row }">
-              <el-tag :type="row.isActive ? 'success' : 'danger'" size="small">
-                {{ row.isActive ? "正常" : "停用" }}
+            <template #status="{ row }">
+              <el-tag :type="row.status ? 'success' : 'danger'" size="small">
+                {{ row.status ? "正常" : "停用" }}
               </el-tag>
             </template>
             <template #operation="{ row }">

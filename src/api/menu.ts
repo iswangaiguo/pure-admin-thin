@@ -17,7 +17,7 @@ export type MenuRecord = {
   keepAlive: boolean;
   frameSrc?: string;
   perms?: string;
-  isActive: boolean;
+  status: boolean;
   menuType: "M" | "C" | "F";
   visible: boolean;
   children?: MenuRecord[];
@@ -37,7 +37,7 @@ export type MenuTreeSelectNode = {
 /** 菜单树查询参数 */
 export type MenuTreeParams = {
   title?: string;
-  isActive?: string;
+  status?: string;
   visible?: string;
   menuTypes?: string[];
 };
@@ -55,7 +55,7 @@ export type MenuFormData = {
   rank?: number;
   showLink?: boolean;
   perms?: string;
-  isActive?: boolean;
+  status?: boolean;
   visible?: boolean;
 };
 

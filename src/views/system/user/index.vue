@@ -20,10 +20,10 @@ const loading = ref(false);
 
 const searchForm = reactive<{
   keyword: string;
-  isActive: "" | boolean;
+  status: "" | boolean;
 }>({
   keyword: "",
-  isActive: ""
+  status: ""
 });
 
 const pagination = reactive({
@@ -56,8 +56,8 @@ const columns = ref<TableColumns[]>([
   },
   {
     label: "状态",
-    prop: "isActive",
-    slot: "isActive",
+    prop: "status",
+    slot: "status",
     width: 80,
     align: "center"
   },
@@ -112,7 +112,7 @@ async function fetchUsers() {
       pageSize: pagination.pageSize
     };
     if (searchForm.keyword) params.keyword = searchForm.keyword;
-    if (searchForm.isActive !== "") params.isActive = searchForm.isActive;
+    if (searchForm.status !== "") params.status = searchForm.status;
     const res = await getUserList(params);
     tableData.value = res.data || [];
     pagination.total = res.meta?.total || 0;
@@ -145,7 +145,7 @@ function handleSearch() {
 
 function handleReset() {
   searchForm.keyword = "";
-  searchForm.isActive = "";
+  searchForm.status = "";
   pagination.page = 1;
   fetchUsers();
 }
@@ -204,7 +204,7 @@ onMounted(() => {
         </el-form-item>
         <el-form-item label="状态">
           <el-select
-            v-model="searchForm.isActive"
+            v-model="searchForm.status"
             placeholder="用户状态"
             clearable
             style="width: 140px"
@@ -255,9 +255,9 @@ onMounted(() => {
             :loading="loading"
             border
           >
-            <template #isActive="{ row }">
-              <el-tag :type="row.isActive ? 'success' : 'danger'" size="small">
-                {{ row.isActive ? "正常" : "禁用" }}
+            <template #status="{ row }">
+              <el-tag :type="row.status ? 'success' : 'danger'" size="small">
+                {{ row.status ? "正常" : "禁用" }}
               </el-tag>
             </template>
             <template #role="{ row }">

@@ -28,7 +28,7 @@ const {
     <LaySidebarTopCollapse
       v-if="device === 'mobile'"
       class="hamburger-container"
-      :is-active="pureApp.sidebar.opened"
+      :status="pureApp.sidebar.opened"
       @toggleClick="toggleSideBar"
     />
 

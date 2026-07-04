@@ -6,11 +6,11 @@ import { useNav } from "@/layout/hooks/useNav";
 import MenuFold from "~icons/ri/menu-fold-fill";
 
 interface Props {
-  isActive?: boolean;
+  status?: boolean;
 }
 
 withDefaults(defineProps<Props>(), {
-  isActive: false
+  status: false
 });
 
 const { tooltipEffect } = useNav();
@@ -44,14 +44,14 @@ const toggleClick = () => {
   <div class="left-collapse">
     <IconifyIconOffline
       v-tippy="{
-        content: isActive ? '点击折叠' : '点击展开',
+        content: status ? '点击折叠' : '点击展开',
         theme: tooltipEffect,
         hideOnClick: 'toggle',
         placement: 'right'
       }"
       :icon="MenuFold"
       :class="[iconClass, themeColor === 'light' ? '' : 'text-primary']"
-      :style="{ transform: isActive ? 'none' : 'rotateY(180deg)' }"
+      :style="{ transform: status ? 'none' : 'rotateY(180deg)' }"
       @click="toggleClick"
     />
   </div>

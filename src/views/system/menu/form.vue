@@ -56,7 +56,7 @@ const defaultFormData: MenuFormData = {
   rank: 0,
   showLink: true,
   perms: "",
-  isActive: true,
+  status: true,
   visible: true
 };
 
@@ -91,7 +91,7 @@ function initForm() {
     formData.rank = props.editRow.rank;
     formData.showLink = props.editRow.showLink;
     formData.perms = props.editRow.perms || "";
-    formData.isActive = props.editRow.isActive;
+    formData.status = props.editRow.status;
     formData.visible = props.editRow.visible;
   } else if (props.parentRow) {
     formData.parentId = props.parentRow.id;
@@ -243,7 +243,7 @@ async function handleSubmit() {
       </el-form-item>
 
       <el-form-item label="菜单状态">
-        <el-switch v-model="formData.isActive" />
+        <el-switch v-model="formData.status" />
       </el-form-item>
     </el-form>
 
