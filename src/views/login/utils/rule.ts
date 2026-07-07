@@ -22,6 +22,18 @@ const loginRules = reactive<FormRules>({
       },
       trigger: "blur"
     }
+  ],
+  captchaCode: [
+    {
+      validator: (rule, value, callback) => {
+        if (value === "") {
+          callback(new Error("请输入验证码"));
+        } else {
+          callback();
+        }
+      },
+      trigger: "blur"
+    }
   ]
 });
 

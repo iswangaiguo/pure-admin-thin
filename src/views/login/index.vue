@@ -14,11 +14,13 @@ import { initRouter, getTopMenu } from "@/router/utils";
 import { bg, avatar, illustration } from "./utils/static";
 import { useRenderIcon } from "@/components/ReIcon/src/hooks";
 import { useDataThemeChange } from "@/layout/hooks/useDataThemeChange";
+import { ReCaptcha } from "@/components/ReCaptcha";
 
 import dayIcon from "@/assets/svg/day.svg?component";
 import darkIcon from "@/assets/svg/dark.svg?component";
 import Lock from "~icons/ri/lock-fill";
 import User from "~icons/ri/user-3-fill";
+import Keyhole from "~icons/ri/shield-keyhole-line";
 
 defineOptions({
   name: "Login"
@@ -28,6 +30,9 @@ const router = useRouter();
 const loading = ref(false);
 const disabled = ref(false);
 const ruleFormRef = ref<FormInstance>();
+const captchaRef = ref<InstanceType<typeof ReCaptcha>>();
+// 后端开关：验证码关闭时不渲染验证码项
+const captchaEnabled = ref(true);
 
 const { initStorage } = useLayout();
 initStorage();
@@ -38,8 +43,19 @@ const { title } = useNav();
 
 const ruleForm = reactive({
   username: "admin",
-  password: "admin123"
+  password: "admin123",
+  captchaCode: "",
+  captchaUuid: ""
 });
+
+const onCaptchaReady = (enabled: boolean) => {
+  captchaEnabled.value = enabled;
+};
+
+const refreshCaptcha = () => {
+  ruleForm.captchaCode = "";
+  captchaRef.value?.refresh();
+};
 
 const onLogin = async (formEl: FormInstance | undefined) => {
   if (!formEl) return;
@@ -49,7 +65,9 @@ const onLogin = async (formEl: FormInstance | undefined) => {
       useUserStoreHook()
         .loginByUsername({
           username: ruleForm.username,
-          password: ruleForm.password
+          password: ruleForm.password,
+          captchaUuid: ruleForm.captchaUuid,
+          captchaCode: ruleForm.captchaCode
         })
         .then(res => {
           if (res?.data) {
@@ -81,6 +99,10 @@ const onLogin = async (formEl: FormInstance | undefined) => {
             message(msg, { type: "error" });
           } else {
             message("登录失败，请稍后重试", { type: "error" });
+          }
+          // 验证码错误或登录失败后，验证码已被后端一次性消费，必须刷新
+          if (captchaEnabled.value) {
+            refreshCaptcha();
           }
         })
         .finally(() => (loading.value = false));
@@ -163,6 +185,25 @@ useEventListener(document, "keydown", ({ code }) => {
                   placeholder="密码"
                   :prefix-icon="useRenderIcon(Lock)"
                 />
+              </el-form-item>
+            </Motion>
+
+            <Motion v-if="captchaEnabled" :delay="200">
+              <el-form-item prop="captchaCode">
+                <el-input
+                  v-model="ruleForm.captchaCode"
+                  clearable
+                  placeholder="验证码"
+                  :prefix-icon="useRenderIcon(Keyhole)"
+                >
+                  <template v-slot:append>
+                    <ReCaptcha
+                      ref="captchaRef"
+                      v-model:uuid="ruleForm.captchaUuid"
+                      @ready="onCaptchaReady"
+                    />
+                  </template>
+                </el-input>
               </el-form-item>
             </Motion>
 

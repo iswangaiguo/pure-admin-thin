@@ -8,6 +8,10 @@ export type LoginParams = {
   password: string;
   /** 记住登录状态 */
   rememberMe?: boolean;
+  /** 验证码 UUID（后端下发，验证码启用时必填） */
+  captchaUuid?: string;
+  /** 用户输入的验证码（验证码启用时必填） */
+  captchaCode?: string;
 };
 
 /** 登录成功响应 */
@@ -43,6 +47,27 @@ export type LoginErrorResult = {
       retryAfter?: number;
     };
   };
+};
+
+/** 验证码响应 */
+export type CaptchaResult = {
+  data: {
+    /** 验证码是否启用 */
+    captchaEnabled?: boolean;
+    /** 验证码 UUID（启用时返回） */
+    uuid?: string;
+    /** base64 编码的 SVG 图片（启用时返回） */
+    img?: string;
+    /** 图片类型，固定为 "svg" */
+    type?: string;
+    /** 验证码有效期（秒） */
+    expiresIn?: number;
+  };
+};
+
+/** 获取登录验证码 */
+export const getCaptcha = () => {
+  return http.request<CaptchaResult>("get", "/api/v1/auth/captcha");
 };
 
 export type RefreshTokenResult = {
