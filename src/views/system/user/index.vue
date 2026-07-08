@@ -76,6 +76,12 @@ const columns = ref<TableColumns[]>([
     formatter: (row: UserRecord) => formatDateTime(row.createdAt)
   },
   {
+    label: "更新时间",
+    prop: "updatedAt",
+    width: 180,
+    formatter: (row: UserRecord) => formatDateTime(row.updatedAt)
+  },
+  {
     label: "操作",
     slot: "operation",
     width: 180,
