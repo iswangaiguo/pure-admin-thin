@@ -49,13 +49,16 @@ push main → 构建前端镜像（pnpm build → nginx 静态站）→ 推送 G
 
 ### GitHub Secrets
 
-在仓库 Settings → Secrets and variables → Actions 中添加：
+workflow 的 deploy job 声明了 `environment: production`，因此 Secrets 需配在 **Environment secrets**：
 
-| Secret     | 说明                                     |
-| ---------- | ---------------------------------------- |
-| `SSH_HOST` | 服务器 IP                                |
-| `SSH_USER` | SSH 登录用户                             |
-| `SSH_KEY`  | SSH 私钥（或用 `SSH_PASSWORD` 改用密码） |
-| `SSH_PORT` | 可选，默认 22                            |
+1. 仓库 Settings → Environments → **New environment** → 命名 `production`
+2. 进入 `production` → 添加以下 secrets：
+
+| Secret     | 说明                                         |
+| ---------- | -------------------------------------------- |
+| `SSH_HOST` | 服务器 IP                                    |
+| `SSH_USER` | SSH 登录用户                                 |
+| `SSH_KEY`  | SSH 私钥（`cat ~/.ssh/id_ed25519` 整段内容） |
+| `SSH_PORT` | 可选，默认 22                                |
 
 GHCR 推送使用 workflow 内置的 `GITHUB_TOKEN`，无需额外配置。镜像仓库需设为公开。
