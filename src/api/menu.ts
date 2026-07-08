@@ -22,7 +22,7 @@ export type MenuRecord = {
   visible: boolean;
   children?: MenuRecord[];
   roles?: string[];
-  insertedAt?: string;
+  createdAt?: string;
   updatedAt?: string;
 };
 

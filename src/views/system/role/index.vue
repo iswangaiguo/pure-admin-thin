@@ -5,6 +5,7 @@ import { hasAuth } from "@/router/utils";
 import { message } from "@/utils/message";
 import { getRoleList, deleteRole, type RoleRecord } from "@/api/role";
 import { getMenuTree, type MenuRecord } from "@/api/menu";
+import { formatDateTime } from "@/utils/date";
 import type { TableColumns } from "@pureadmin/table";
 import RoleForm from "./form.vue";
 
@@ -51,7 +52,14 @@ const columns = ref<TableColumns[]>([
   {
     label: "创建时间",
     prop: "createdAt",
-    width: 180
+    width: 180,
+    formatter: (row: RoleRecord) => formatDateTime(row.createdAt)
+  },
+  {
+    label: "更新时间",
+    prop: "updatedAt",
+    width: 180,
+    formatter: (row: RoleRecord) => formatDateTime(row.updatedAt)
   },
   {
     label: "操作",

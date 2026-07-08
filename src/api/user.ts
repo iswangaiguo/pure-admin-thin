@@ -114,6 +114,8 @@ export type UserRecord = {
   lastLoginAt: string | null;
   /** 创建时间 */
   createdAt: string;
+  /** 更新时间 */
+  updatedAt?: string;
 };
 
 /** 用户表单数据 */
@@ -200,6 +202,7 @@ export type CurrentUserResult = {
     roles: string[];
     lastLoginAt: string | null;
     createdAt: string;
+    updatedAt?: string;
   };
 };
 

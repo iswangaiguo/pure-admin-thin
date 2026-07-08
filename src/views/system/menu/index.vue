@@ -9,6 +9,7 @@ import {
   deleteMenu,
   type MenuRecord
 } from "@/api/menu";
+import { formatDateTime } from "@/utils/date";
 import type { TableColumns } from "@pureadmin/table";
 import MenuForm from "./form.vue";
 
@@ -67,6 +68,18 @@ const columns = ref<TableColumns[]>([
     slot: "status",
     width: 80,
     align: "center"
+  },
+  {
+    label: "创建时间",
+    prop: "createdAt",
+    width: 180,
+    formatter: (row: MenuRecord) => formatDateTime(row.createdAt)
+  },
+  {
+    label: "更新时间",
+    prop: "updatedAt",
+    width: 180,
+    formatter: (row: MenuRecord) => formatDateTime(row.updatedAt)
   },
   {
     label: "操作",
