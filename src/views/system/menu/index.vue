@@ -41,7 +41,7 @@ const columns = ref<TableColumns[]>([
     label: "菜单类型",
     prop: "menuType",
     slot: "menuType",
-    minWidth: 50,
+    width: 90,
     align: "center"
   },
   {
@@ -84,7 +84,7 @@ const columns = ref<TableColumns[]>([
   {
     label: "操作",
     slot: "operation",
-    width: 240,
+    width: 200,
     align: "center",
     fixed: "right"
   }
