@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, reactive, watch } from "vue";
+import { computed, ref, reactive, watch } from "vue";
 import { message } from "@/utils/message";
 import {
   createMenu,
   updateMenu,
+  updateMenuPerms,
   type MenuRecord,
   type MenuFormData
 } from "@/api/menu";
@@ -13,16 +14,31 @@ defineOptions({
   name: "MenuForm"
 });
 
-const props = defineProps<{
-  visible: boolean;
-  treeSelectData?: any[];
-  editRow?: MenuRecord | null;
-  parentRow?: MenuRecord | null;
-}>();
+type MenuFormMode = "create" | "metadata" | "permissions";
+type MenuFormSuccess = {
+  kind: MenuFormMode;
+  menu: MenuRecord;
+};
+
+const props = withDefaults(
+  defineProps<{
+    visible: boolean;
+    mode?: MenuFormMode;
+    treeSelectData?: any[];
+    editRow?: MenuRecord | null;
+    parentRow?: MenuRecord | null;
+  }>(),
+  {
+    mode: "create",
+    treeSelectData: () => [],
+    editRow: null,
+    parentRow: null
+  }
+);
 
 const emit = defineEmits<{
   (e: "update:visible", value: boolean): void;
-  (e: "success"): void;
+  (e: "success", result: MenuFormSuccess): void;
 }>();
 
 const submitLoading = ref(false);
@@ -120,22 +136,27 @@ const defaultFormData: MenuFormData = {
   icon: "",
   rank: 0,
   showLink: true,
-  perms: "",
   status: 1,
   visible: true
 };
 
 const formData = reactive<MenuFormData>({ ...defaultFormData });
+const permsValue = ref<string>("");
 const editingId = ref<number | null>(null);
 const isEdit = ref(false);
 
-const dialogTitle = ref("新增菜单");
+const isPermissionMode = computed(() => props.mode === "permissions");
+const dialogTitle = computed(() => {
+  if (props.mode === "permissions") return "配置权限标识";
+  if (props.mode === "metadata") return "修改菜单资料";
+  return "新增菜单";
+});
 
 function resetForm() {
   Object.assign(formData, cloneDeep(defaultFormData));
+  permsValue.value = "";
   editingId.value = null;
   isEdit.value = false;
-  dialogTitle.value = "新增菜单";
 }
 
 function initForm() {
@@ -144,7 +165,6 @@ function initForm() {
   if (props.editRow) {
     editingId.value = props.editRow.id;
     isEdit.value = true;
-    dialogTitle.value = "修改菜单";
 
     formData.parentId = props.editRow.parentId;
     formData.menuType = props.editRow.menuType;
@@ -155,13 +175,12 @@ function initForm() {
     formData.icon = props.editRow.icon || "";
     formData.rank = props.editRow.rank;
     formData.showLink = props.editRow.showLink;
-    formData.perms = props.editRow.perms || "";
+    permsValue.value = props.editRow.perms || "";
     formData.status = props.editRow.status;
     formData.visible = props.editRow.visible;
   } else if (props.parentRow) {
     formData.parentId = props.parentRow.id;
     formData.menuType = props.parentRow.menuType === "M" ? "C" : "F";
-    dialogTitle.value = "新增菜单";
   }
 }
 
@@ -190,11 +209,33 @@ function clearIcon() {
 }
 
 async function handleSubmit() {
+  if (isPermissionMode.value) {
+    if (!editingId.value) {
+      message("未找到要配置权限的节点", { type: "warning" });
+      return;
+    }
+
+    submitLoading.value = true;
+    try {
+      const response = await updateMenuPerms(editingId.value, {
+        perms: permsValue.value.trim()
+      });
+      message("权限标识更新成功", { type: "success" });
+      emit("update:visible", false);
+      emit("success", { kind: "permissions", menu: response.data });
+    } catch {
+      message("权限标识更新失败", { type: "error" });
+    } finally {
+      submitLoading.value = false;
+    }
+    return;
+  }
+
   if (!formData.title) {
     message("请输入菜单名称", { type: "warning" });
     return;
   }
-  if (formData.menuType !== "F" && !formData.path) {
+  if (!formData.path) {
     message("请输入路由地址", { type: "warning" });
     return;
   }
@@ -206,17 +247,27 @@ async function handleSubmit() {
   submitLoading.value = true;
   try {
     const data = { ...formData };
+    let menu: MenuRecord;
     if (isEdit.value && editingId.value) {
-      await updateMenu(editingId.value, data);
-      message("修改成功", { type: "success" });
+      const response = await updateMenu(editingId.value, data);
+      menu = response.data;
+      message("菜单资料修改成功", { type: "success" });
     } else {
-      await createMenu(data);
-      message("新增成功", { type: "success" });
+      const response = await createMenu(data);
+      menu = response.data;
+      message(
+        formData.menuType === "F"
+          ? "权限节点创建成功，请继续配置权限标识"
+          : "菜单创建成功",
+        { type: "success" }
+      );
     }
     emit("update:visible", false);
-    emit("success");
+    emit("success", { kind: props.mode, menu });
   } catch {
-    message(isEdit.value ? "修改失败" : "新增失败", { type: "error" });
+    message(isEdit.value ? "菜单资料修改失败" : "菜单创建失败", {
+      type: "error"
+    });
   } finally {
     submitLoading.value = false;
   }
@@ -234,125 +285,143 @@ async function handleSubmit() {
     @close="handleCancel"
   >
     <el-form :model="formData" label-width="100px" class="menu-form">
-      <el-form-item label="上级菜单">
-        <el-tree-select
-          v-model="formData.parentId"
-          :data="treeSelectData"
-          :props="{ value: 'id', label: 'label', children: 'children' }"
-          placeholder="顶级菜单（留空）"
-          clearable
-          check-strictly
-          style="width: 100%"
-        />
-      </el-form-item>
+      <template v-if="!isPermissionMode">
+        <el-form-item label="上级菜单">
+          <el-tree-select
+            v-model="formData.parentId"
+            :data="treeSelectData"
+            :props="{ value: 'id', label: 'label', children: 'children' }"
+            placeholder="顶级菜单（留空）"
+            clearable
+            check-strictly
+            style="width: 100%"
+          />
+        </el-form-item>
 
-      <el-form-item label="菜单类型">
-        <el-radio-group v-model="formData.menuType" :disabled="isEdit">
-          <el-radio-button value="M">目录</el-radio-button>
-          <el-radio-button value="C">菜单</el-radio-button>
-          <el-radio-button value="F">按钮</el-radio-button>
-        </el-radio-group>
-      </el-form-item>
+        <el-form-item label="菜单类型">
+          <el-radio-group v-model="formData.menuType" :disabled="isEdit">
+            <el-radio-button value="M">目录</el-radio-button>
+            <el-radio-button value="C">菜单</el-radio-button>
+            <el-radio-button value="F">按钮</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
 
-      <el-form-item label="菜单名称">
-        <el-input
-          v-model="formData.title"
-          placeholder="请输入菜单名称"
-          maxlength="50"
-        />
-      </el-form-item>
+        <el-form-item label="菜单名称">
+          <el-input
+            v-model="formData.title"
+            placeholder="请输入菜单名称"
+            maxlength="50"
+          />
+        </el-form-item>
 
-      <el-form-item v-if="formData.menuType !== 'F'" label="路由地址">
-        <el-input
-          v-model="formData.path"
-          :placeholder="
-            formData.menuType === 'M'
-              ? '目录路径，如 /system'
-              : '路由路径，如 system/user'
-          "
-        />
-      </el-form-item>
+        <el-form-item label="路由地址">
+          <el-input
+            v-model="formData.path"
+            :placeholder="
+              formData.menuType === 'M'
+                ? '目录路径，如 /system'
+                : formData.menuType === 'C'
+                  ? '路由路径，如 /system/user'
+                  : '权限节点路径，如 /system/user/create'
+            "
+          />
+        </el-form-item>
 
-      <el-form-item v-if="formData.menuType === 'C'" label="组件路径">
-        <el-input
-          v-model="formData.component"
-          placeholder="如 system/user/index"
-        />
-      </el-form-item>
+        <el-form-item v-if="formData.menuType === 'C'" label="组件路径">
+          <el-input
+            v-model="formData.component"
+            placeholder="如 system/user/index"
+          />
+        </el-form-item>
 
-      <el-form-item v-if="formData.menuType !== 'M'" label="权限标识">
-        <el-input
-          v-model="formData.perms"
-          :placeholder="
-            formData.menuType === 'C' ? '如 user:list' : '如 user:create'
-          "
-        />
-      </el-form-item>
-
-      <el-form-item v-if="formData.menuType !== 'F'" label="菜单图标">
-        <el-popover
-          v-model:visible="iconPopoverVisible"
-          placement="bottom-start"
-          trigger="click"
-          :width="420"
-          popper-class="menu-icon-popover"
-        >
-          <template #reference>
-            <el-input
-              :model-value="formData.icon"
-              placeholder="请选择菜单图标"
-              readonly
-              clearable
-              class="icon-picker-input"
-              @clear="clearIcon"
-            >
-              <template v-if="formData.icon" #prefix>
-                <IconifyIconOnline :icon="formData.icon" />
-              </template>
-            </el-input>
-          </template>
-
-          <div class="icon-picker">
-            <div class="icon-picker-header">
-              <span>选择菜单图标</span>
-              <el-button link type="primary" @click="clearIcon">清空</el-button>
-            </div>
-            <div class="icon-picker-grid">
-              <button
-                v-for="opt in iconOptions"
-                :key="opt.value"
-                type="button"
-                class="icon-picker-item"
-                :class="{ 'is-active': formData.icon === opt.value }"
-                :title="`${opt.label} (${opt.value})`"
-                :aria-label="`${opt.label} (${opt.value})`"
-                @click="selectIcon(opt.value)"
+        <el-form-item v-if="formData.menuType !== 'F'" label="菜单图标">
+          <el-popover
+            v-model:visible="iconPopoverVisible"
+            placement="bottom-start"
+            trigger="click"
+            :width="420"
+            popper-class="menu-icon-popover"
+          >
+            <template #reference>
+              <el-input
+                :model-value="formData.icon"
+                placeholder="请选择菜单图标"
+                readonly
+                clearable
+                class="icon-picker-input"
+                @clear="clearIcon"
               >
-                <IconifyIconOnline :icon="opt.value" class="icon-picker-icon" />
-              </button>
+                <template v-if="formData.icon" #prefix>
+                  <IconifyIconOnline :icon="formData.icon" />
+                </template>
+              </el-input>
+            </template>
+
+            <div class="icon-picker">
+              <div class="icon-picker-header">
+                <span>选择菜单图标</span>
+                <el-button link type="primary" @click="clearIcon"
+                  >清空</el-button
+                >
+              </div>
+              <div class="icon-picker-grid">
+                <button
+                  v-for="opt in iconOptions"
+                  :key="opt.value"
+                  type="button"
+                  class="icon-picker-item"
+                  :class="{ 'is-active': formData.icon === opt.value }"
+                  :title="`${opt.label} (${opt.value})`"
+                  :aria-label="`${opt.label} (${opt.value})`"
+                  @click="selectIcon(opt.value)"
+                >
+                  <IconifyIconOnline
+                    :icon="opt.value"
+                    class="icon-picker-icon"
+                  />
+                </button>
+              </div>
             </div>
-          </div>
-        </el-popover>
-      </el-form-item>
+          </el-popover>
+        </el-form-item>
 
-      <el-form-item label="显示排序">
-        <el-input-number v-model="formData.rank" :min="0" :max="999" />
-      </el-form-item>
+        <el-form-item label="显示排序">
+          <el-input-number v-model="formData.rank" :min="0" :max="999" />
+        </el-form-item>
 
-      <el-form-item v-if="formData.menuType !== 'F'" label="显示状态">
-        <el-radio-group v-model="formData.visible">
-          <el-radio :value="true">显示</el-radio>
-          <el-radio :value="false">隐藏</el-radio>
-        </el-radio-group>
-      </el-form-item>
+        <el-form-item v-if="formData.menuType !== 'F'" label="显示状态">
+          <el-radio-group v-model="formData.visible">
+            <el-radio :value="true">显示</el-radio>
+            <el-radio :value="false">隐藏</el-radio>
+          </el-radio-group>
+        </el-form-item>
 
-      <el-form-item label="菜单状态">
-        <el-switch
-          v-model="formData.status"
-          :active-value="1"
-          :inactive-value="0"
+        <el-form-item label="菜单状态">
+          <el-switch
+            v-model="formData.status"
+            :active-value="1"
+            :inactive-value="0"
+          />
+        </el-form-item>
+      </template>
+
+      <template v-else>
+        <el-alert
+          :title="`正在配置【${formData.title}】的权限标识`"
+          description="该操作独立于菜单资料修改，仅拥有 permission:manage 的用户可以提交。"
+          type="warning"
+          :closable="false"
+          show-icon
+          class="permission-alert"
         />
-      </el-form-item>
+        <el-form-item label="权限标识">
+          <el-input
+            v-model="permsValue"
+            placeholder="如 user:create；多个权限使用英文逗号分隔"
+            clearable
+          />
+        </el-form-item>
+      </template>
     </el-form>
 
     <template #footer>
@@ -363,7 +432,7 @@ async function handleSubmit() {
           :loading="submitLoading"
           @click="handleSubmit"
         >
-          确 定
+          {{ isPermissionMode ? "保存权限标识" : "保 存" }}
         </el-button>
       </div>
     </template>
@@ -379,6 +448,10 @@ async function handleSubmit() {
   :deep(.el-form-item) {
     margin-bottom: 18px;
   }
+}
+
+.permission-alert {
+  margin-bottom: 18px;
 }
 
 .dialog-footer {

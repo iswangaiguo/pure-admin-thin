@@ -1,13 +1,23 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from "vue";
 import { PureTableBar } from "@/components/RePureTableBar";
-import { hasAuth } from "@/router/utils";
+import { hasAuth, initRouter } from "@/router/utils";
+import { resetRouter, router } from "@/router";
+import { useUserStoreHook } from "@/store/modules/user";
+import { getToken } from "@/utils/auth";
 import { message } from "@/utils/message";
+import { storageLocal } from "@pureadmin/utils";
 import { getRoleList, deleteRole, type RoleRecord } from "@/api/role";
 import { getMenuTree, type MenuRecord } from "@/api/menu";
 import { formatDateTime } from "@/utils/date";
 import type { TableColumns } from "@pureadmin/table";
 import RoleForm from "./form.vue";
+
+type RoleFormMode = "create" | "metadata" | "permissions";
+type RoleFormSuccess = {
+  kind: RoleFormMode;
+  role: RoleRecord;
+};
 
 defineOptions({
   name: "RoleManagement"
@@ -64,7 +74,7 @@ const columns = ref<TableColumns[]>([
   {
     label: "操作",
     slot: "operation",
-    width: 180,
+    width: 260,
     align: "center",
     fixed: "right"
   }
@@ -74,20 +84,55 @@ const columns = ref<TableColumns[]>([
 
 const formVisible = ref(false);
 const editRow = ref<RoleRecord | null>(null);
+const formMode = ref<RoleFormMode>("create");
 
 function openAddDialog() {
   editRow.value = null;
+  formMode.value = "create";
   formVisible.value = true;
 }
 
 function openEditDialog(row: RoleRecord) {
   editRow.value = row;
+  formMode.value = "metadata";
   formVisible.value = true;
 }
 
-function onFormSuccess() {
+function openPermissionDialog(row: RoleRecord) {
+  editRow.value = row;
+  formMode.value = "permissions";
+  formVisible.value = true;
+}
+
+async function refreshCurrentAccess() {
+  const token = getToken();
+  if (!token?.refreshToken) return;
+
+  await useUserStoreHook().handRefreshToken(token);
+  storageLocal().removeItem("async-routes");
+
+  const currentFullPath = router.currentRoute.value.fullPath;
+  resetRouter();
+  await initRouter();
+  await router.replace(`/redirect${currentFullPath}`);
+}
+
+async function onFormSuccess(result: RoleFormSuccess) {
   formVisible.value = false;
-  fetchRoles();
+  await fetchRoles();
+
+  if (
+    result.kind === "permissions" &&
+    useUserStoreHook().roles.includes(result.role.code)
+  ) {
+    try {
+      await refreshCurrentAccess();
+    } catch {
+      message("权限已保存，但当前会话刷新失败，请重新登录", {
+        type: "warning"
+      });
+    }
+  }
 }
 
 /** 菜单树数据 */
@@ -115,11 +160,16 @@ async function fetchRoles() {
 }
 
 async function fetchMenuTree() {
+  if (!hasAuth("role:assign_permission")) {
+    menuTreeData.value = [];
+    return;
+  }
+
   try {
-    const res = await getMenuTree({ menuTypes: ["M", "C"] });
+    const res = await getMenuTree({ menuTypes: ["M", "C", "F"] });
     menuTreeData.value = res.data || [];
   } catch {
-    // ignore
+    message("获取权限树失败", { type: "error" });
   }
 }
 
@@ -231,6 +281,15 @@ onMounted(() => {
               >
                 编辑
               </el-button>
+              <el-button
+                v-if="hasAuth('role:assign_permission')"
+                link
+                type="warning"
+                size="small"
+                @click="openPermissionDialog(row)"
+              >
+                分配权限
+              </el-button>
               <el-popconfirm
                 v-if="hasAuth('role:delete')"
                 :title="'是否确认删除角色【' + row.name + '】？'"
@@ -248,6 +307,7 @@ onMounted(() => {
 
     <RoleForm
       v-model:visible="formVisible"
+      :mode="formMode"
       :menu-tree-data="menuTreeData"
       :edit-row="editRow"
       @success="onFormSuccess"

@@ -44,7 +44,7 @@ export type MenuTreeParams = {
   menuTypes?: string[];
 };
 
-/** 菜单创建/更新参数 */
+/** 菜单创建/更新参数（仅展示元数据，不含 perms） */
 export type MenuFormData = {
   parentId?: number | null;
   menuType: "M" | "C" | "F";
@@ -56,7 +56,6 @@ export type MenuFormData = {
   icon?: string;
   rank?: number;
   showLink?: boolean;
-  perms?: string;
   status?: StatusCode;
   visible?: boolean;
 };
@@ -106,14 +105,14 @@ export const deleteMenu = (id: number) => {
   return http.request<MenuResult>("delete", `/api/v1/menus/${id}`);
 };
 
-/** 菜单角色更新参数 */
-export type MenuRoleFormData = {
-  role_ids: number[];
+/** 菜单权限策略更新参数 */
+export type MenuPermsFormData = {
+  perms: string;
 };
 
-/** 更新菜单关联角色 */
-export const updateMenuRoles = (id: number, data: MenuRoleFormData) => {
-  return http.request<MenuResult>("patch", `/api/v1/menus/${id}/roles`, {
+/** 更新菜单权限策略（perms） */
+export const updateMenuPerms = (id: number, data: MenuPermsFormData) => {
+  return http.request<MenuResult>("patch", `/api/v1/menus/${id}/perms`, {
     data
   });
 };

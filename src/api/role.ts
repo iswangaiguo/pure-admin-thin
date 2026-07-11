@@ -17,12 +17,11 @@ export type RoleRecord = {
   updatedAt?: string;
 };
 
-/** 角色表单数据 */
+/** 角色创建/更新参数（仅元数据，不含权限关联） */
 export type RoleFormData = {
   code: string;
   name: string;
   status?: StatusCode;
-  menus?: number[];
 };
 
 /** 角色菜单更新参数 */

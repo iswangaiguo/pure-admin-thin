@@ -134,6 +134,24 @@ export type UserFormData = {
   roles?: string[];
 };
 
+/** 用户资料表单数据（不含密码和角色） */
+export type UserProfileFormData = {
+  /** 用户名 */
+  username: string;
+  /** 邮箱 */
+  email: string;
+};
+
+/** 重置密码参数 */
+export type ResetPasswordData = {
+  password: string;
+};
+
+/** 分配角色参数 */
+export type AssignRolesData = {
+  roles: string[];
+};
+
 /** 用户列表查询参数 */
 export type UserListParams = {
   page?: number;
@@ -171,9 +189,23 @@ export const createUser = (data: UserFormData) => {
   return http.request<UserResult>("post", "/api/v1/users", { data });
 };
 
-/** 修改用户 */
-export const updateUser = (id: number, data: UserFormData) => {
+/** 修改用户（仅资料） */
+export const updateUser = (id: number, data: UserProfileFormData) => {
   return http.request<UserResult>("put", `/api/v1/users/${id}`, { data });
+};
+
+/** 重置用户密码 */
+export const resetUserPassword = (id: number, data: ResetPasswordData) => {
+  return http.request<UserResult>("patch", `/api/v1/users/${id}/password`, {
+    data
+  });
+};
+
+/** 分配用户角色 */
+export const assignUserRoles = (id: number, data: AssignRolesData) => {
+  return http.request<UserResult>("patch", `/api/v1/users/${id}/roles`, {
+    data
+  });
 };
 
 /** 删除用户（硬删除） */

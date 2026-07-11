@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from "vue";
 import { PureTableBar } from "@/components/RePureTableBar";
-import { hasAuth } from "@/router/utils";
+import { hasAuth, initRouter } from "@/router/utils";
+import { resetRouter, router } from "@/router";
+import { useUserStoreHook } from "@/store/modules/user";
+import { getToken } from "@/utils/auth";
 import { message } from "@/utils/message";
+import { storageLocal } from "@pureadmin/utils";
 import {
   getUserList,
   deleteUser,
@@ -13,6 +17,12 @@ import { getRoleList, type RoleRecord } from "@/api/role";
 import { formatDateTime } from "@/utils/date";
 import type { TableColumns } from "@pureadmin/table";
 import UserForm from "./form.vue";
+
+type UserFormMode = "create" | "profile" | "password" | "status" | "roles";
+type UserFormSuccess = {
+  kind: UserFormMode;
+  user: UserRecord;
+};
 
 defineOptions({
   name: "UserManagement"
@@ -89,7 +99,7 @@ const columns = ref<TableColumns[]>([
   {
     label: "操作",
     slot: "operation",
-    width: 180,
+    width: 370,
     align: "center",
     fixed: "right"
   }
@@ -99,20 +109,58 @@ const columns = ref<TableColumns[]>([
 
 const formVisible = ref(false);
 const editRow = ref<UserRecord | null>(null);
+const formMode = ref<UserFormMode>("create");
 
 function openAddDialog() {
   editRow.value = null;
+  formMode.value = "create";
   formVisible.value = true;
 }
 
-function openEditDialog(row: UserRecord) {
+function openUserDialog(
+  row: UserRecord,
+  mode: Exclude<UserFormMode, "create">
+) {
   editRow.value = row;
+  formMode.value = mode;
   formVisible.value = true;
 }
 
-function onFormSuccess() {
+async function refreshCurrentAccess(refreshRoutes: boolean) {
+  const token = getToken();
+  if (!token?.refreshToken) return;
+
+  await useUserStoreHook().handRefreshToken(token);
+  if (!refreshRoutes) return;
+
+  storageLocal().removeItem("async-routes");
+  const currentFullPath = router.currentRoute.value.fullPath;
+  resetRouter();
+  await initRouter();
+  await router.replace(`/redirect${currentFullPath}`);
+}
+
+async function onFormSuccess(result: UserFormSuccess) {
+  const editedCurrentUser =
+    editRow.value?.username === useUserStoreHook().username;
+
   formVisible.value = false;
-  fetchUsers();
+  await fetchUsers();
+
+  if (
+    editedCurrentUser &&
+    ["profile", "roles", "status"].includes(result.kind)
+  ) {
+    try {
+      await refreshCurrentAccess(
+        result.kind === "roles" || result.kind === "status"
+      );
+    } catch {
+      message("操作已保存，但当前会话刷新失败，请重新登录", {
+        type: "warning"
+      });
+    }
+  }
 }
 
 // ==================== API 调用 ====================
@@ -295,9 +343,36 @@ onMounted(() => {
                 link
                 type="primary"
                 size="small"
-                @click="openEditDialog(row)"
+                @click="openUserDialog(row, 'profile')"
               >
-                编辑
+                资料
+              </el-button>
+              <el-button
+                v-if="hasAuth('user:reset_password')"
+                link
+                type="warning"
+                size="small"
+                @click="openUserDialog(row, 'password')"
+              >
+                重置密码
+              </el-button>
+              <el-button
+                v-if="hasAuth('user:update_status')"
+                link
+                type="primary"
+                size="small"
+                @click="openUserDialog(row, 'status')"
+              >
+                状态
+              </el-button>
+              <el-button
+                v-if="hasAuth('user:assign_roles')"
+                link
+                type="warning"
+                size="small"
+                @click="openUserDialog(row, 'roles')"
+              >
+                分配角色
               </el-button>
               <el-popconfirm
                 v-if="hasAuth('user:delete')"
@@ -328,6 +403,7 @@ onMounted(() => {
 
     <UserForm
       v-model:visible="formVisible"
+      :mode="formMode"
       :role-options="roleOptions"
       :edit-row="editRow"
       @success="onFormSuccess"

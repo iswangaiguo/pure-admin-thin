@@ -1,26 +1,43 @@
 <script setup lang="ts">
-import { ref, reactive, watch, nextTick } from "vue";
+import { computed, nextTick, reactive, ref, watch } from "vue";
 import { message } from "@/utils/message";
 import {
   createRole,
   updateRole,
-  type RoleRecord,
-  type RoleFormData
+  updateRoleMenus,
+  type RoleFormData,
+  type RoleRecord
 } from "@/api/role";
+import type { MenuRecord } from "@/api/menu";
 
 defineOptions({
   name: "RoleForm"
 });
 
-const props = defineProps<{
-  visible: boolean;
-  menuTreeData?: any[];
-  editRow?: RoleRecord | null;
-}>();
+type RoleFormMode = "create" | "metadata" | "permissions";
+
+type RoleFormSuccess = {
+  kind: RoleFormMode;
+  role: RoleRecord;
+};
+
+const props = withDefaults(
+  defineProps<{
+    visible: boolean;
+    mode?: RoleFormMode;
+    menuTreeData?: MenuRecord[];
+    editRow?: RoleRecord | null;
+  }>(),
+  {
+    mode: "create",
+    menuTreeData: () => [],
+    editRow: null
+  }
+);
 
 const emit = defineEmits<{
   (e: "update:visible", value: boolean): void;
-  (e: "success"): void;
+  (e: "success", result: RoleFormSuccess): void;
 }>();
 
 const treeRef = ref<any>(null);
@@ -29,36 +46,32 @@ const submitLoading = ref(false);
 const defaultFormData: RoleFormData = {
   code: "",
   name: "",
-  status: 1,
-  menus: []
+  status: 1
 };
 
 const formData = reactive<RoleFormData>({ ...defaultFormData });
 const editingId = ref<number | null>(null);
-const isEdit = ref(false);
-const dialogTitle = ref("新增角色");
 
-function getLeafIds(tree: any[]): Set<number> {
-  const leafIds = new Set<number>();
-  function traverse(nodes: any[]) {
-    for (const node of nodes) {
-      if (!node.children || node.children.length === 0) {
-        leafIds.add(node.id);
-      } else {
-        traverse(node.children);
-      }
-    }
-  }
-  traverse(tree);
-  return leafIds;
-}
+const isCreate = computed(() => props.mode === "create");
+const isPermissionMode = computed(() => props.mode === "permissions");
+const dialogTitle = computed(() => {
+  if (props.mode === "permissions") return "分配角色权限";
+  if (props.mode === "metadata") return "修改角色资料";
+  return "新增角色";
+});
 
 function resetForm() {
   Object.assign(formData, { ...defaultFormData });
   editingId.value = null;
-  isEdit.value = false;
-  dialogTitle.value = "新增角色";
   treeRef.value?.setCheckedKeys([]);
+}
+
+function setCurrentPermissionSelection() {
+  if (!props.visible || !isPermissionMode.value) return;
+
+  nextTick(() => {
+    treeRef.value?.setCheckedKeys(props.editRow?.menus || []);
+  });
 }
 
 function initForm() {
@@ -66,73 +79,86 @@ function initForm() {
 
   if (props.editRow) {
     editingId.value = props.editRow.id;
-    isEdit.value = true;
-    dialogTitle.value = "修改角色";
-
     formData.code = props.editRow.code;
     formData.name = props.editRow.name;
     formData.status = props.editRow.status;
-    formData.menus = props.editRow.menus || [];
-
-    nextTick(() => {
-      const leafIds = getLeafIds(props.menuTreeData || []);
-      const leafKeys = (props.editRow?.menus || []).filter(id =>
-        leafIds.has(id)
-      );
-      treeRef.value?.setCheckedKeys(leafKeys);
-    });
-  } else {
-    nextTick(() => {
-      treeRef.value?.setCheckedKeys([]);
-    });
   }
+
+  setCurrentPermissionSelection();
 }
 
 watch(
   () => props.visible,
-  val => {
-    if (val) {
-      initForm();
-    }
+  visible => {
+    if (visible) initForm();
   }
+);
+
+watch(
+  () => props.menuTreeData,
+  () => setCurrentPermissionSelection(),
+  { deep: true }
 );
 
 function handleCancel() {
   emit("update:visible", false);
 }
 
-async function handleSubmit() {
-  if (!formData.code) {
-    message("请输入角色标识", { type: "warning" });
-    return;
+function validationError(): string {
+  if (isPermissionMode.value) {
+    return editingId.value ? "" : "未找到要分配权限的角色";
   }
-  if (!formData.name) {
-    message("请输入角色名称", { type: "warning" });
+  if (!formData.code) return "请输入角色标识";
+  if (!formData.name) return "请输入角色名称";
+  return "";
+}
+
+function failureMessage(): string {
+  if (props.mode === "permissions") return "权限分配失败";
+  if (props.mode === "metadata") return "角色资料修改失败";
+  return "角色创建失败";
+}
+
+async function handleSubmit() {
+  const error = validationError();
+  if (error) {
+    message(error, { type: "warning" });
     return;
   }
 
   submitLoading.value = true;
   try {
-    const checkedKeys = treeRef.value?.getCheckedKeys() || [];
-    const halfCheckedKeys = treeRef.value?.getHalfCheckedKeys() || [];
-    const data: RoleFormData = {
-      code: formData.code,
-      name: formData.name,
-      status: formData.status,
-      menus: [...checkedKeys, ...halfCheckedKeys]
-    };
+    let role: RoleRecord;
 
-    if (isEdit.value && editingId.value) {
-      await updateRole(editingId.value, data);
-      message("修改成功", { type: "success" });
+    if (props.mode === "permissions" && editingId.value) {
+      // check-strictly 保证提交的是用户明确勾选的节点，不隐式扩大 F 权限。
+      const menuIds = (treeRef.value?.getCheckedKeys() || []).map(Number);
+      const response = await updateRoleMenus(editingId.value, { menuIds });
+      role = response.data;
+      message("权限分配成功", { type: "success" });
     } else {
-      await createRole(data);
-      message("新增成功", { type: "success" });
+      const metadata: RoleFormData = {
+        code: formData.code.trim(),
+        name: formData.name.trim(),
+        status: formData.status
+      };
+
+      if (props.mode === "metadata" && editingId.value) {
+        const response = await updateRole(editingId.value, metadata);
+        role = response.data;
+        message("角色资料修改成功", { type: "success" });
+      } else {
+        const response = await createRole(metadata);
+        role = response.data;
+        message("角色创建成功，请按需分配权限", { type: "success" });
+      }
     }
+
     emit("update:visible", false);
-    emit("success");
+    emit("success", { kind: props.mode, role });
   } catch {
-    message(isEdit.value ? "修改失败" : "新增失败", { type: "error" });
+    // 每个模式只执行一个命令，因此不会把部分成功误报为整体失败。
+    message(failureMessage(), { type: "error" });
   } finally {
     submitLoading.value = false;
   }
@@ -143,48 +169,78 @@ async function handleSubmit() {
   <el-dialog
     :model-value="visible"
     :title="dialogTitle"
-    width="600px"
+    width="640px"
     :close-on-click-modal="false"
     destroy-on-close
     @update:model-value="handleCancel"
     @close="handleCancel"
   >
-    <el-form :model="formData" label-width="80px" class="role-form">
-      <el-form-item label="角色标识">
-        <el-input
-          v-model="formData.code"
-          placeholder="请输入角色标识，如 admin"
-          :disabled="isEdit"
-          maxlength="50"
-        />
-      </el-form-item>
-      <el-form-item label="角色名称">
-        <el-input
-          v-model="formData.name"
-          placeholder="请输入角色名称"
-          maxlength="50"
-        />
-      </el-form-item>
-      <el-form-item label="状态">
-        <el-switch
-          v-model="formData.status"
-          :active-value="1"
-          :inactive-value="0"
-        />
-      </el-form-item>
-      <el-form-item label="菜单权限" class="menu-permission-item">
-        <div class="menu-tree-container">
-          <el-tree
-            ref="treeRef"
-            :data="menuTreeData"
-            :props="{ label: 'title', children: 'children' }"
-            node-key="id"
-            show-checkbox
-            default-expand-all
-            class="menu-tree"
+    <el-form :model="formData" label-width="90px" class="role-form">
+      <template v-if="!isPermissionMode">
+        <el-form-item label="角色标识">
+          <el-input
+            v-model="formData.code"
+            placeholder="请输入角色标识，如 auditor"
+            :disabled="!isCreate"
+            maxlength="50"
           />
-        </div>
-      </el-form-item>
+        </el-form-item>
+        <el-form-item label="角色名称">
+          <el-input
+            v-model="formData.name"
+            placeholder="请输入角色名称"
+            maxlength="50"
+          />
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-switch
+            v-model="formData.status"
+            :active-value="1"
+            :inactive-value="0"
+          />
+        </el-form-item>
+      </template>
+
+      <template v-else>
+        <el-alert
+          :title="`正在为角色【${formData.name}】分配权限`"
+          description="目录、菜单和按钮权限均为独立节点；仅提交明确勾选的节点。"
+          type="info"
+          :closable="false"
+          show-icon
+          class="permission-alert"
+        />
+        <el-form-item label="权限节点" class="menu-permission-item">
+          <div class="menu-tree-container">
+            <el-tree
+              ref="treeRef"
+              :data="menuTreeData"
+              :props="{ label: 'title', children: 'children' }"
+              node-key="id"
+              show-checkbox
+              check-strictly
+              default-expand-all
+              class="menu-tree"
+            >
+              <template #default="{ data }">
+                <span class="permission-node">
+                  <span>{{ data.title }}</span>
+                  <el-tag
+                    v-if="data.menuType === 'F'"
+                    type="warning"
+                    size="small"
+                  >
+                    按钮
+                  </el-tag>
+                  <code v-if="data.menuType === 'F' && data.perms">
+                    {{ data.perms }}
+                  </code>
+                </span>
+              </template>
+            </el-tree>
+          </div>
+        </el-form-item>
+      </template>
     </el-form>
     <template #footer>
       <div class="dialog-footer">
@@ -194,7 +250,7 @@ async function handleSubmit() {
           :loading="submitLoading"
           @click="handleSubmit"
         >
-          确 定
+          {{ isPermissionMode ? "保存权限" : "保 存" }}
         </el-button>
       </div>
     </template>
@@ -210,6 +266,10 @@ async function handleSubmit() {
   }
 }
 
+.permission-alert {
+  margin-bottom: 18px;
+}
+
 .menu-permission-item {
   :deep(.el-form-item__content) {
     min-width: 0;
@@ -218,12 +278,25 @@ async function handleSubmit() {
 
 .menu-tree-container {
   width: 100%;
-  max-height: 300px;
+  max-height: 360px;
   overflow-y: auto;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 4px;
 }
 
 .menu-tree {
   width: 100%;
+  padding: 8px;
+}
+
+.permission-node {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+
+  code {
+    color: var(--el-text-color-secondary);
+  }
 }
 
 .dialog-footer {

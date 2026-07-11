@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from "vue";
 import { PureTableBar } from "@/components/RePureTableBar";
-import { hasAuth } from "@/router/utils";
+import { hasAuth, initRouter } from "@/router/utils";
+import { resetRouter, router } from "@/router";
+import { useUserStoreHook } from "@/store/modules/user";
+import { getToken } from "@/utils/auth";
 import { message } from "@/utils/message";
+import { storageLocal } from "@pureadmin/utils";
 import {
   getMenuTree,
   getMenuTreeSelect,
@@ -13,6 +17,12 @@ import {
 import { formatDateTime } from "@/utils/date";
 import type { TableColumns } from "@pureadmin/table";
 import MenuForm from "./form.vue";
+
+type MenuFormMode = "create" | "metadata" | "permissions";
+type MenuFormSuccess = {
+  kind: MenuFormMode;
+  menu: MenuRecord;
+};
 
 defineOptions({
   name: "MenuManagement"
@@ -33,89 +43,125 @@ const searchForm = reactive<{
 
 // ==================== 表格列定义 ====================
 
-const columns = ref<TableColumns[]>([
-  {
-    label: "菜单名称",
-    prop: "title",
-    slot: "title",
-    minWidth: 200,
-    align: "left"
-  },
-  {
-    label: "菜单类型",
-    prop: "menuType",
-    slot: "menuType",
-    width: 90,
-    align: "center"
-  },
-  {
-    label: "权限标识",
-    prop: "perms",
-    minWidth: 160,
-    showOverflowTooltip: true
-  },
-  {
-    label: "组件路径",
-    prop: "component",
-    minWidth: 180,
-    showOverflowTooltip: true
-  },
-  {
-    label: "排序",
-    prop: "rank",
-    width: 70,
-    align: "center"
-  },
-  {
-    label: "状态",
-    prop: "status",
-    slot: "status",
-    width: 80,
-    align: "center"
-  },
-  {
-    label: "创建时间",
-    prop: "createdAt",
-    width: 180,
-    formatter: (row: MenuRecord) => formatDateTime(row.createdAt)
-  },
-  {
-    label: "更新时间",
-    prop: "updatedAt",
-    width: 180,
-    formatter: (row: MenuRecord) => formatDateTime(row.updatedAt)
-  },
-  {
-    label: "操作",
-    slot: "operation",
-    width: 200,
-    align: "center",
-    fixed: "right"
-  }
-]);
+const columns = ref<TableColumns[]>(
+  (
+    [
+      {
+        label: "菜单名称",
+        prop: "title",
+        slot: "title",
+        minWidth: 200,
+        align: "left"
+      },
+      {
+        label: "菜单类型",
+        prop: "menuType",
+        slot: "menuType",
+        width: 90,
+        align: "center"
+      },
+      {
+        label: "权限标识",
+        prop: "perms",
+        minWidth: 160,
+        showOverflowTooltip: true
+      },
+      {
+        label: "组件路径",
+        prop: "component",
+        minWidth: 180,
+        showOverflowTooltip: true
+      },
+      {
+        label: "排序",
+        prop: "rank",
+        width: 70,
+        align: "center"
+      },
+      {
+        label: "状态",
+        prop: "status",
+        slot: "status",
+        width: 80,
+        align: "center"
+      },
+      {
+        label: "创建时间",
+        prop: "createdAt",
+        width: 180,
+        formatter: (row: MenuRecord) => formatDateTime(row.createdAt)
+      },
+      {
+        label: "更新时间",
+        prop: "updatedAt",
+        width: 180,
+        formatter: (row: MenuRecord) => formatDateTime(row.updatedAt)
+      },
+      {
+        label: "操作",
+        slot: "operation",
+        width: 270,
+        align: "center",
+        fixed: "right"
+      }
+    ] satisfies TableColumns[]
+  ).filter(column => column.prop !== "perms" || hasAuth("permission:manage"))
+);
 
 // ==================== 对话框表单 ====================
 
 const formVisible = ref(false);
 const editRow = ref<MenuRecord | null>(null);
 const parentRow = ref<MenuRecord | null>(null);
+const formMode = ref<MenuFormMode>("create");
 
 function openAddDialog(parent?: MenuRecord) {
   editRow.value = null;
   parentRow.value = parent || null;
+  formMode.value = "create";
   formVisible.value = true;
 }
 
 function openEditDialog(row: MenuRecord) {
   editRow.value = row;
   parentRow.value = null;
+  formMode.value = "metadata";
   formVisible.value = true;
 }
 
-function onFormSuccess() {
+function openPermissionDialog(row: MenuRecord) {
+  editRow.value = row;
+  parentRow.value = null;
+  formMode.value = "permissions";
+  formVisible.value = true;
+}
+
+async function refreshCurrentAccess() {
+  const token = getToken();
+  if (!token?.refreshToken) return;
+
+  await useUserStoreHook().handRefreshToken(token);
+  storageLocal().removeItem("async-routes");
+
+  const currentFullPath = router.currentRoute.value.fullPath;
+  resetRouter();
+  await initRouter();
+  await router.replace(`/redirect${currentFullPath}`);
+}
+
+async function onFormSuccess(result: MenuFormSuccess) {
   formVisible.value = false;
-  fetchMenuTree();
-  fetchTreeSelect();
+  await Promise.all([fetchMenuTree(), fetchTreeSelect()]);
+
+  if (result.kind === "permissions") {
+    try {
+      await refreshCurrentAccess();
+    } catch {
+      message("权限标识已保存，但当前会话刷新失败，请重新登录", {
+        type: "warning"
+      });
+    }
+  }
 }
 
 /** 上级菜单树数据 */
@@ -327,6 +373,15 @@ onMounted(() => {
               >
                 编辑
               </el-button>
+              <el-button
+                v-if="hasAuth('permission:manage')"
+                link
+                type="warning"
+                size="small"
+                @click="openPermissionDialog(row)"
+              >
+                权限标识
+              </el-button>
               <el-popconfirm
                 v-if="hasAuth('menu:delete')"
                 :title="'是否确认删除菜单【' + row.title + '】？'"
@@ -344,6 +399,7 @@ onMounted(() => {
 
     <MenuForm
       v-model:visible="formVisible"
+      :mode="formMode"
       :tree-select-data="treeSelectData"
       :edit-row="editRow"
       :parent-row="parentRow"
