@@ -37,6 +37,7 @@ const formData = reactive<UserFormData>({ ...defaultFormData });
 const editingId = ref<number | null>(null);
 const isEdit = ref(false);
 const dialogTitle = ref("新增用户");
+const PASSWORD_MIN_LENGTH = 8;
 
 function resetForm() {
   Object.assign(formData, { ...defaultFormData });
@@ -74,6 +75,16 @@ function handleCancel() {
   emit("update:visible", false);
 }
 
+function passwordError(password: string) {
+  if (password.trim() === "") {
+    return "密码不能全为空白字符";
+  }
+  if (password.length < PASSWORD_MIN_LENGTH) {
+    return `密码长度至少${PASSWORD_MIN_LENGTH}位`;
+  }
+  return "";
+}
+
 async function handleSubmit() {
   if (!formData.username) {
     message("请输入用户名", { type: "warning" });
@@ -86,6 +97,13 @@ async function handleSubmit() {
   if (!isEdit.value && !formData.password) {
     message("请输入密码", { type: "warning" });
     return;
+  }
+  if (formData.password) {
+    const error = passwordError(formData.password);
+    if (error) {
+      message(error, { type: "warning" });
+      return;
+    }
   }
 
   submitLoading.value = true;
