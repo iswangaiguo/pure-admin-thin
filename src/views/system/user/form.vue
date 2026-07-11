@@ -29,7 +29,7 @@ const defaultFormData: UserFormData = {
   username: "",
   email: "",
   password: "",
-  status: true,
+  status: 1,
   roles: []
 };
 
@@ -152,8 +152,8 @@ async function handleSubmit() {
       </el-form-item>
       <el-form-item label="状态">
         <el-radio-group v-model="formData.status">
-          <el-radio :value="true">正常</el-radio>
-          <el-radio :value="false">禁用</el-radio>
+          <el-radio :value="1">正常</el-radio>
+          <el-radio :value="0">禁用</el-radio>
         </el-radio-group>
       </el-form-item>
       <el-form-item label="角色">

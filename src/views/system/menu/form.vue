@@ -121,7 +121,7 @@ const defaultFormData: MenuFormData = {
   rank: 0,
   showLink: true,
   perms: "",
-  status: true,
+  status: 1,
   visible: true
 };
 
@@ -347,7 +347,11 @@ async function handleSubmit() {
       </el-form-item>
 
       <el-form-item label="菜单状态">
-        <el-switch v-model="formData.status" />
+        <el-switch
+          v-model="formData.status"
+          :active-value="1"
+          :inactive-value="0"
+        />
       </el-form-item>
     </el-form>
 

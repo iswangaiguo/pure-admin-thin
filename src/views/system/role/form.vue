@@ -29,7 +29,7 @@ const submitLoading = ref(false);
 const defaultFormData: RoleFormData = {
   code: "",
   name: "",
-  status: true,
+  status: 1,
   menus: []
 };
 
@@ -166,7 +166,11 @@ async function handleSubmit() {
         />
       </el-form-item>
       <el-form-item label="状态">
-        <el-switch v-model="formData.status" />
+        <el-switch
+          v-model="formData.status"
+          :active-value="1"
+          :inactive-value="0"
+        />
       </el-form-item>
       <el-form-item label="菜单权限" class="menu-permission-item">
         <div class="menu-tree-container">

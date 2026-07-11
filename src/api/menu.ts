@@ -1,5 +1,7 @@
 import { http } from "@/utils/http";
 
+export type StatusCode = 0 | 1;
+
 /** 菜单记录 */
 export type MenuRecord = {
   id: number;
@@ -17,7 +19,7 @@ export type MenuRecord = {
   keepAlive: boolean;
   frameSrc?: string;
   perms?: string;
-  status: boolean;
+  status: StatusCode;
   menuType: "M" | "C" | "F";
   visible: boolean;
   children?: MenuRecord[];
@@ -37,7 +39,7 @@ export type MenuTreeSelectNode = {
 /** 菜单树查询参数 */
 export type MenuTreeParams = {
   title?: string;
-  status?: string;
+  status?: StatusCode | "";
   visible?: string;
   menuTypes?: string[];
 };
@@ -55,7 +57,7 @@ export type MenuFormData = {
   rank?: number;
   showLink?: boolean;
   perms?: string;
-  status?: boolean;
+  status?: StatusCode;
   visible?: boolean;
 };
 

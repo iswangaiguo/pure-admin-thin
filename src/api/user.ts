@@ -97,6 +97,8 @@ export const refreshTokenApi = (data?: object) => {
 
 // ==================== 用户管理 CRUD ====================
 
+export type StatusCode = 0 | 1;
+
 /** 用户记录 */
 export type UserRecord = {
   id: number;
@@ -106,8 +108,8 @@ export type UserRecord = {
   email: string;
   /** 手机号 */
   phone: string | null;
-  /** 是否启用 */
-  status: boolean;
+  /** 启用状态：1 启用，0 禁用 */
+  status: StatusCode;
   /** 角色代码列表 */
   roles: string[];
   /** 最后登录时间 */
@@ -126,8 +128,8 @@ export type UserFormData = {
   email: string;
   /** 密码（新增时必填，编辑时留空表示不修改） */
   password?: string;
-  /** 是否启用 */
-  status?: boolean;
+  /** 启用状态：1 启用，0 禁用 */
+  status?: StatusCode;
   /** 角色代码列表 */
   roles?: string[];
 };
@@ -139,7 +141,7 @@ export type UserListParams = {
   /** 关键词（搜索用户名或邮箱） */
   keyword?: string;
   /** 启用状态过滤 */
-  status?: boolean | "";
+  status?: StatusCode | "";
   /** 角色过滤 */
   role?: string;
 };
@@ -185,7 +187,7 @@ export const getUser = (id: number) => {
 };
 
 /** 更新用户状态 */
-export const updateUserStatus = (id: number, status: boolean) => {
+export const updateUserStatus = (id: number, status: StatusCode) => {
   return http.request<UserResult>("patch", `/api/v1/users/${id}/status`, {
     data: { status }
   });
@@ -198,7 +200,7 @@ export type CurrentUserResult = {
     username: string;
     email: string;
     phone: string | null;
-    status: boolean;
+    status: StatusCode;
     roles: string[];
     lastLoginAt: string | null;
     createdAt: string;

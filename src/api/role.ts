@@ -1,5 +1,7 @@
 import { http } from "@/utils/http";
 
+export type StatusCode = 0 | 1;
+
 /** 角色记录 */
 export type RoleRecord = {
   id: number;
@@ -7,8 +9,8 @@ export type RoleRecord = {
   code: string;
   /** 角色名称 */
   name: string;
-  /** 是否启用 */
-  status: boolean;
+  /** 启用状态：1 启用，0 禁用 */
+  status: StatusCode;
   /** 关联菜单ID列表 */
   menus: number[];
   createdAt?: string;
@@ -19,7 +21,7 @@ export type RoleRecord = {
 export type RoleFormData = {
   code: string;
   name: string;
-  status?: boolean;
+  status?: StatusCode;
   menus?: number[];
 };
 

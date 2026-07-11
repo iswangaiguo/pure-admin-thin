@@ -7,6 +7,7 @@ import {
   getMenuTree,
   getMenuTreeSelect,
   deleteMenu,
+  type StatusCode,
   type MenuRecord
 } from "@/api/menu";
 import { formatDateTime } from "@/utils/date";
@@ -22,7 +23,10 @@ defineOptions({
 const tableRef = ref<any>(null);
 const tableData = ref<MenuRecord[]>([]);
 const loading = ref(false);
-const searchForm = reactive({
+const searchForm = reactive<{
+  title: string;
+  status: "" | StatusCode;
+}>({
   title: "",
   status: ""
 });
@@ -122,9 +126,9 @@ const treeSelectData = ref<any[]>([]);
 async function fetchMenuTree() {
   loading.value = true;
   try {
-    const params: Record<string, string> = {};
+    const params: Record<string, string | number> = {};
     if (searchForm.title) params.title = searchForm.title;
-    if (searchForm.status) params.status = searchForm.status;
+    if (searchForm.status !== "") params.status = searchForm.status;
     const res = await getMenuTree(params);
     tableData.value = res.data || [];
   } catch {
@@ -201,8 +205,8 @@ onMounted(() => {
             clearable
             style="width: 140px"
           >
-            <el-option label="正常" value="true" />
-            <el-option label="停用" value="false" />
+            <el-option label="正常" :value="1" />
+            <el-option label="停用" :value="0" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -295,8 +299,11 @@ onMounted(() => {
 
             <!-- 状态列 -->
             <template #status="{ row }">
-              <el-tag :type="row.status ? 'success' : 'danger'" size="small">
-                {{ row.status ? "正常" : "停用" }}
+              <el-tag
+                :type="row.status === 1 ? 'success' : 'danger'"
+                size="small"
+              >
+                {{ row.status === 1 ? "正常" : "停用" }}
               </el-tag>
             </template>
 

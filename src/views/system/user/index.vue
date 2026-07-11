@@ -3,7 +3,12 @@ import { ref, reactive, onMounted } from "vue";
 import { PureTableBar } from "@/components/RePureTableBar";
 import { hasAuth } from "@/router/utils";
 import { message } from "@/utils/message";
-import { getUserList, deleteUser, type UserRecord } from "@/api/user";
+import {
+  getUserList,
+  deleteUser,
+  type StatusCode,
+  type UserRecord
+} from "@/api/user";
 import { getRoleList, type RoleRecord } from "@/api/role";
 import { formatDateTime } from "@/utils/date";
 import type { TableColumns } from "@pureadmin/table";
@@ -21,7 +26,7 @@ const loading = ref(false);
 
 const searchForm = reactive<{
   keyword: string;
-  status: "" | boolean;
+  status: "" | StatusCode;
 }>({
   keyword: "",
   status: ""
@@ -218,8 +223,8 @@ onMounted(() => {
             style="width: 140px"
           >
             <el-option label="全部" value="" />
-            <el-option label="正常" :value="true" />
-            <el-option label="禁用" :value="false" />
+            <el-option label="正常" :value="1" />
+            <el-option label="禁用" :value="0" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -264,8 +269,11 @@ onMounted(() => {
             border
           >
             <template #status="{ row }">
-              <el-tag :type="row.status ? 'success' : 'danger'" size="small">
-                {{ row.status ? "正常" : "禁用" }}
+              <el-tag
+                :type="row.status === 1 ? 'success' : 'danger'"
+                size="small"
+              >
+                {{ row.status === 1 ? "正常" : "禁用" }}
               </el-tag>
             </template>
             <template #role="{ row }">

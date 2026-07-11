@@ -214,8 +214,11 @@ onMounted(() => {
             border
           >
             <template #status="{ row }">
-              <el-tag :type="row.status ? 'success' : 'danger'" size="small">
-                {{ row.status ? "正常" : "停用" }}
+              <el-tag
+                :type="row.status === 1 ? 'success' : 'danger'"
+                size="small"
+              >
+                {{ row.status === 1 ? "正常" : "停用" }}
               </el-tag>
             </template>
             <template #operation="{ row }">
