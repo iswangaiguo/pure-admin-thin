@@ -1,4 +1,5 @@
 import { http } from "@/utils/http";
+import type { RoleRecord } from "@/api/role";
 
 /** 登录请求参数 */
 export type LoginParams = {
@@ -179,9 +180,21 @@ type UserPageResult = {
   };
 };
 
+type AssignableRolesResult = {
+  data: RoleRecord[];
+};
+
 /** 获取用户列表（分页） */
 export const getUserList = (params?: UserListParams) => {
   return http.request<UserPageResult>("get", "/api/v1/users", { params });
+};
+
+/** 获取当前操作人可以授予的角色 */
+export const getAssignableRoles = () => {
+  return http.request<AssignableRolesResult>(
+    "get",
+    "/api/v1/users/assignable-roles"
+  );
 };
 
 /** 新增用户 */

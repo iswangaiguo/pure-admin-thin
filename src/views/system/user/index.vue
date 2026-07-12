@@ -1,27 +1,31 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from "vue";
 import { PureTableBar } from "@/components/RePureTableBar";
-import { hasAuth, initRouter } from "@/router/utils";
+import { initRouter } from "@/router/utils";
 import { resetRouter, router } from "@/router";
 import { useUserStoreHook } from "@/store/modules/user";
-import { getToken } from "@/utils/auth";
+import { getToken, hasPerms } from "@/utils/auth";
 import { message } from "@/utils/message";
 import { storageLocal } from "@pureadmin/utils";
 import {
   getUserList,
+  getAssignableRoles,
   deleteUser,
   type StatusCode,
   type UserRecord
 } from "@/api/user";
-import { getRoleList, type RoleRecord } from "@/api/role";
+import type { RoleRecord } from "@/api/role";
 import { formatDateTime } from "@/utils/date";
 import type { TableColumns } from "@pureadmin/table";
 import UserForm from "./form.vue";
 
-type UserFormMode = "create" | "profile" | "password" | "status" | "roles";
+type UserFormMode = "create" | "edit";
+type UserEditSection = "profile" | "password" | "status" | "roles";
 type UserFormSuccess = {
   kind: UserFormMode;
   user: UserRecord;
+  changed: UserEditSection[];
+  partial?: boolean;
 };
 
 defineOptions({
@@ -99,7 +103,7 @@ const columns = ref<TableColumns[]>([
   {
     label: "操作",
     slot: "operation",
-    width: 370,
+    width: 120,
     align: "center",
     fixed: "right"
   }
@@ -117,13 +121,19 @@ function openAddDialog() {
   formVisible.value = true;
 }
 
-function openUserDialog(
-  row: UserRecord,
-  mode: Exclude<UserFormMode, "create">
-) {
+function openEditDialog(row: UserRecord) {
   editRow.value = row;
-  formMode.value = mode;
+  formMode.value = "edit";
   formVisible.value = true;
+}
+
+function canEditUser(): boolean {
+  return [
+    "user:update",
+    "user:reset_password",
+    "user:update_status",
+    "user:assign_roles"
+  ].some(hasPerms);
 }
 
 async function refreshCurrentAccess(refreshRoutes: boolean) {
@@ -147,13 +157,10 @@ async function onFormSuccess(result: UserFormSuccess) {
   formVisible.value = false;
   await fetchUsers();
 
-  if (
-    editedCurrentUser &&
-    ["profile", "roles", "status"].includes(result.kind)
-  ) {
+  if (editedCurrentUser && result.kind === "edit") {
     try {
       await refreshCurrentAccess(
-        result.kind === "roles" || result.kind === "status"
+        result.changed.includes("roles") || result.changed.includes("status")
       );
     } catch {
       message("操作已保存，但当前会话刷新失败，请重新登录", {
@@ -185,11 +192,17 @@ async function fetchUsers() {
 }
 
 async function fetchRoles() {
+  if (!hasPerms("user:assign_roles")) {
+    roleOptions.value = [];
+    return;
+  }
+
   try {
-    const res = await getRoleList();
+    const res = await getAssignableRoles();
     roleOptions.value = res.data || [];
   } catch {
-    // ignore
+    roleOptions.value = [];
+    message("获取可分配角色失败", { type: "error" });
   }
 }
 
@@ -297,7 +310,7 @@ onMounted(() => {
       >
         <template #buttons>
           <el-button
-            v-if="hasAuth('user:create')"
+            v-if="hasPerms('user:create')"
             type="primary"
             @click="openAddDialog"
           >
@@ -339,43 +352,16 @@ onMounted(() => {
             </template>
             <template #operation="{ row }">
               <el-button
-                v-if="hasAuth('user:update')"
+                v-if="canEditUser()"
                 link
                 type="primary"
                 size="small"
-                @click="openUserDialog(row, 'profile')"
+                @click="openEditDialog(row)"
               >
-                资料
-              </el-button>
-              <el-button
-                v-if="hasAuth('user:reset_password')"
-                link
-                type="warning"
-                size="small"
-                @click="openUserDialog(row, 'password')"
-              >
-                重置密码
-              </el-button>
-              <el-button
-                v-if="hasAuth('user:update_status')"
-                link
-                type="primary"
-                size="small"
-                @click="openUserDialog(row, 'status')"
-              >
-                状态
-              </el-button>
-              <el-button
-                v-if="hasAuth('user:assign_roles')"
-                link
-                type="warning"
-                size="small"
-                @click="openUserDialog(row, 'roles')"
-              >
-                分配角色
+                编辑
               </el-button>
               <el-popconfirm
-                v-if="hasAuth('user:delete')"
+                v-if="hasPerms('user:delete')"
                 :title="'是否确认删除用户【' + row.username + '】？'"
                 @confirm="handleDelete(row)"
               >

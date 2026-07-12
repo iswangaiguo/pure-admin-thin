@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
+import { hasPerms } from "@/utils/auth";
 import { message } from "@/utils/message";
 import {
   assignUserRoles,
@@ -16,10 +17,13 @@ defineOptions({
   name: "UserForm"
 });
 
-type UserFormMode = "create" | "profile" | "password" | "status" | "roles";
+type UserFormMode = "create" | "edit";
+type UserEditSection = "profile" | "password" | "status" | "roles";
 type UserFormSuccess = {
   kind: UserFormMode;
   user: UserRecord;
+  changed: UserEditSection[];
+  partial?: boolean;
 };
 
 const props = withDefaults(
@@ -44,6 +48,12 @@ const emit = defineEmits<{
 const submitLoading = ref(false);
 const editingId = ref<number | null>(null);
 const PASSWORD_MIN_LENGTH = 8;
+const initialFormData = ref({
+  username: "",
+  email: "",
+  status: 1 as StatusCode,
+  roles: [] as string[]
+});
 
 const formData = reactive<{
   username: string;
@@ -59,20 +69,21 @@ const formData = reactive<{
   roles: []
 });
 
-const dialogTitle = computed(() => {
-  switch (props.mode) {
-    case "profile":
-      return "修改用户资料";
-    case "password":
-      return "重置用户密码";
-    case "status":
-      return "更新用户状态";
-    case "roles":
-      return "分配用户角色";
-    default:
-      return "新增用户";
-  }
-});
+const dialogTitle = computed(() =>
+  props.mode === "edit" ? "编辑用户" : "新增用户"
+);
+const canEditProfile = computed(
+  () => props.mode === "create" || hasPerms("user:update")
+);
+const canResetPassword = computed(
+  () => props.mode === "create" || hasPerms("user:reset_password")
+);
+const canEditStatus = computed(
+  () => props.mode === "edit" && hasPerms("user:update_status")
+);
+const canAssignRoles = computed(
+  () => props.mode === "edit" && hasPerms("user:assign_roles")
+);
 
 function resetForm() {
   formData.username = "";
@@ -81,6 +92,12 @@ function resetForm() {
   formData.status = 1;
   formData.roles = [];
   editingId.value = null;
+  initialFormData.value = {
+    username: "",
+    email: "",
+    status: 1,
+    roles: []
+  };
 }
 
 function initForm() {
@@ -92,6 +109,12 @@ function initForm() {
     formData.email = props.editRow.email;
     formData.status = props.editRow.status;
     formData.roles = [...(props.editRow.roles || [])];
+    initialFormData.value = {
+      username: props.editRow.username,
+      email: props.editRow.email,
+      status: props.editRow.status,
+      roles: [...(props.editRow.roles || [])]
+    };
   }
 }
 
@@ -115,31 +138,56 @@ function passwordError(password: string) {
 }
 
 function validationError(): string {
-  if (props.mode === "create" || props.mode === "profile") {
+  if (canEditProfile.value) {
     if (!formData.username.trim()) return "请输入用户名";
     if (!formData.email.trim()) return "请输入邮箱";
   }
 
-  if (props.mode === "create" || props.mode === "password") {
+  if (props.mode === "create") return passwordError(formData.password);
+
+  if (canResetPassword.value && formData.password !== "") {
     return passwordError(formData.password);
   }
 
   return !editingId.value ? "未找到要操作的用户" : "";
 }
 
-function failureMessage(): string {
-  switch (props.mode) {
-    case "profile":
-      return "用户资料修改失败";
-    case "password":
-      return "密码重置失败";
-    case "status":
-      return "用户状态更新失败";
-    case "roles":
-      return "角色分配失败";
-    default:
-      return "用户创建失败";
+function sameRoles(left: string[], right: string[]): boolean {
+  return [...left].sort().join(",") === [...right].sort().join(",");
+}
+
+function changedSections(): UserEditSection[] {
+  const changed: UserEditSection[] = [];
+  const initial = initialFormData.value;
+
+  if (
+    canEditProfile.value &&
+    (formData.username.trim() !== initial.username ||
+      formData.email.trim() !== initial.email)
+  ) {
+    changed.push("profile");
   }
+  if (canResetPassword.value && formData.password !== "") {
+    changed.push("password");
+  }
+  if (canEditStatus.value && formData.status !== initial.status) {
+    changed.push("status");
+  }
+  if (canAssignRoles.value && !sameRoles(formData.roles, initial.roles)) {
+    changed.push("roles");
+  }
+
+  return changed;
+}
+
+function sectionNames(sections: UserEditSection[]): string {
+  const names: Record<UserEditSection, string> = {
+    profile: "基本资料",
+    password: "密码",
+    status: "状态",
+    roles: "角色"
+  };
+  return sections.map(section => names[section]).join("、");
 }
 
 async function handleSubmit() {
@@ -150,47 +198,79 @@ async function handleSubmit() {
   }
 
   submitLoading.value = true;
-  try {
-    let user: UserRecord;
+  const completed: UserEditSection[] = [];
+  let latestUser = props.editRow;
 
-    if (props.mode === "profile" && editingId.value) {
-      const response = await updateUser(editingId.value, {
-        username: formData.username.trim(),
-        email: formData.email.trim()
-      });
-      user = response.data;
-      message("用户资料修改成功", { type: "success" });
-    } else if (props.mode === "password" && editingId.value) {
-      const response = await resetUserPassword(editingId.value, {
-        password: formData.password
-      });
-      user = response.data;
-      message("密码重置成功", { type: "success" });
-    } else if (props.mode === "status" && editingId.value) {
-      const response = await updateUserStatus(editingId.value, formData.status);
-      user = response.data;
-      message("用户状态更新成功", { type: "success" });
-    } else if (props.mode === "roles" && editingId.value) {
-      const response = await assignUserRoles(editingId.value, {
-        roles: formData.roles
-      });
-      user = response.data;
-      message("角色分配成功", { type: "success" });
-    } else {
-      // 创建只提交创建所需字段；状态与角色由各自受控命令后续处理。
+  try {
+    if (props.mode === "create") {
       const response = await createUser({
         username: formData.username.trim(),
         email: formData.email.trim(),
         password: formData.password
       });
-      user = response.data;
+      latestUser = response.data;
       message("用户创建成功", { type: "success" });
+    } else if (editingId.value) {
+      const changed = changedSections();
+      if (changed.length === 0) {
+        message("未检测到需要保存的修改", { type: "warning" });
+        return;
+      }
+
+      if (changed.includes("profile")) {
+        const response = await updateUser(editingId.value, {
+          username: formData.username.trim(),
+          email: formData.email.trim()
+        });
+        latestUser = response.data;
+        completed.push("profile");
+      }
+      if (changed.includes("password")) {
+        const response = await resetUserPassword(editingId.value, {
+          password: formData.password
+        });
+        latestUser = response.data;
+        completed.push("password");
+      }
+      if (changed.includes("status")) {
+        const response = await updateUserStatus(
+          editingId.value,
+          formData.status
+        );
+        latestUser = response.data;
+        completed.push("status");
+      }
+      if (changed.includes("roles")) {
+        const response = await assignUserRoles(editingId.value, {
+          roles: formData.roles
+        });
+        latestUser = response.data;
+        completed.push("roles");
+      }
+
+      message("用户修改成功", { type: "success" });
     }
 
+    if (!latestUser) throw new Error("missing user response");
     emit("update:visible", false);
-    emit("success", { kind: props.mode, user });
+    emit("success", { kind: props.mode, user: latestUser, changed: completed });
   } catch {
-    message(failureMessage(), { type: "error" });
+    if (completed.length > 0 && latestUser) {
+      emit("update:visible", false);
+      emit("success", {
+        kind: "edit",
+        user: latestUser,
+        changed: completed,
+        partial: true
+      });
+      message(`${sectionNames(completed)}已保存，其他修改失败，请重试`, {
+        type: "warning"
+      });
+    } else {
+      message(props.mode === "create" ? "用户创建失败" : "用户修改失败", {
+        type: "error"
+      });
+    }
   } finally {
     submitLoading.value = false;
   }
@@ -208,7 +288,7 @@ async function handleSubmit() {
     @close="handleCancel"
   >
     <el-form :model="formData" label-width="90px" class="user-form">
-      <template v-if="mode === 'create' || mode === 'profile'">
+      <template v-if="canEditProfile">
         <el-form-item label="用户名">
           <el-input
             v-model="formData.username"
@@ -226,26 +306,30 @@ async function handleSubmit() {
       </template>
 
       <el-form-item
-        v-if="mode === 'create' || mode === 'password'"
-        label="密码"
+        v-if="canResetPassword"
+        :label="mode === 'create' ? '密码' : '新密码'"
       >
         <el-input
           v-model="formData.password"
           type="password"
-          placeholder="请输入至少 8 位密码"
+          :placeholder="
+            mode === 'create' ? '请输入至少 8 位密码' : '留空表示不修改密码'
+          "
           maxlength="50"
           show-password
         />
       </el-form-item>
 
-      <el-form-item v-if="mode === 'status'" label="用户状态">
+      <el-divider v-if="mode === 'edit' && (canEditStatus || canAssignRoles)" />
+
+      <el-form-item v-if="canEditStatus" label="用户状态">
         <el-radio-group v-model="formData.status">
           <el-radio :value="1">正常</el-radio>
           <el-radio :value="0">禁用</el-radio>
         </el-radio-group>
       </el-form-item>
 
-      <el-form-item v-if="mode === 'roles'" label="用户角色">
+      <el-form-item v-if="canAssignRoles" label="用户角色">
         <el-select
           v-model="formData.roles"
           multiple

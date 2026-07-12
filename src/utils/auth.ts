@@ -87,6 +87,10 @@ export function setToken(data: DataInfo<number>) {
   }
 
   if (data.username && data.roles) {
+    // Login and refresh responses carry the current authorization snapshot.
+    // Cached async routes contain button auths, so they must not survive a
+    // role or permission refresh.
+    storageLocal().removeItem("async-routes");
     const { username, roles } = data;
     setUserKey({
       avatar: data?.avatar ?? "",
@@ -121,6 +125,7 @@ export function removeToken() {
   Cookies.remove(TokenKey);
   Cookies.remove(multipleTabsKey);
   storageLocal().removeItem(userKey);
+  storageLocal().removeItem("async-routes");
 }
 
 /** 格式化token（jwt格式） */
