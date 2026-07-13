@@ -97,7 +97,7 @@ class PureHttp {
         })
         .catch(error => {
           PureHttp.rejectPendingRequests(error);
-          useUserStoreHook().logOut();
+          useUserStoreHook().logOut(false);
         })
         .finally(() => {
           PureHttp.isRefreshing = false;

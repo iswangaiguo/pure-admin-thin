@@ -96,6 +96,14 @@ export const refreshTokenApi = (data?: object) => {
   });
 };
 
+/** 撤销当前登录会话 */
+export const logoutApi = () => {
+  return http.request<{ data: { success: boolean } }>(
+    "post",
+    "/api/v1/auth/logout"
+  );
+};
+
 // ==================== 用户管理 CRUD ====================
 
 export type StatusCode = 0 | 1;

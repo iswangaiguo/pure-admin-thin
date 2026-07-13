@@ -43,7 +43,7 @@ const { title } = useNav();
 
 const ruleForm = reactive({
   username: "admin",
-  password: "admin12345",
+  password: import.meta.env.DEV ? "admin12345" : "",
   captchaCode: "",
   captchaUuid: ""
 });
