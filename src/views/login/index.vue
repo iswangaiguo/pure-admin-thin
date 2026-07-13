@@ -67,7 +67,13 @@ const clearServerError = (field: keyof typeof serverErrors) => {
 
 const showLoginError = (error: any) => {
   const errData = error?.response?.data?.errors;
+  const status = error?.response?.status;
   let errorMessage = errData?.message || "登录失败，请稍后重试";
+
+  if (status >= 500 && status < 600) {
+    message(errorMessage, { type: "error" });
+    return;
+  }
 
   if (errData?.details?.remainingAttempts != null) {
     errorMessage += `，剩余尝试次数：${errData.details.remainingAttempts}`;
