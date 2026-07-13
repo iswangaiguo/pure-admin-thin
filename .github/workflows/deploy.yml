@@ -78,8 +78,10 @@ jobs:
             cd /opt/elixadmin
 
             # 前端镜像由本仓库构建，编排文件在后端仓库，
-            # 这里只需拉取最新前端镜像并重启 frontend 服务
+            # 这里只需拉取最新前端镜像并重启 frontend 服务。禁止
+            # Compose 启动或重建依赖服务，否则会以默认 IMAGE_TAG=latest
+            # 覆盖后端部署流程固定的 sha 镜像。
             docker compose pull frontend
-            docker compose up -d frontend
+            docker compose up -d --no-deps frontend
 
             echo "Frontend deployed: ${{ needs.build-push.outputs.sha-tag }}"
