@@ -33,6 +33,10 @@ const ruleFormRef = ref<FormInstance>();
 const captchaRef = ref<InstanceType<typeof ReCaptcha>>();
 // 后端开关：验证码关闭时不渲染验证码项
 const captchaEnabled = ref(true);
+const serverErrors = reactive({
+  password: "",
+  captchaCode: ""
+});
 
 const { initStorage } = useLayout();
 initStorage();
@@ -57,10 +61,33 @@ const refreshCaptcha = () => {
   captchaRef.value?.refresh();
 };
 
+const clearServerError = (field: keyof typeof serverErrors) => {
+  serverErrors[field] = "";
+};
+
+const showLoginError = (error: any) => {
+  const errData = error?.response?.data?.errors;
+  let errorMessage = errData?.message || "登录失败，请稍后重试";
+
+  if (errData?.details?.remainingAttempts != null) {
+    errorMessage += `，剩余尝试次数：${errData.details.remainingAttempts}`;
+  }
+  if (errData?.details?.retryAfter != null) {
+    const mins = Math.ceil(errData.details.retryAfter / 60);
+    errorMessage += `，请${mins}分钟后再试`;
+  }
+
+  const field =
+    errData?.code === "captcha_invalid" ? "captchaCode" : "password";
+  serverErrors[field] = errorMessage;
+};
+
 const onLogin = async (formEl: FormInstance | undefined) => {
   if (!formEl) return;
   await formEl.validate(valid => {
     if (valid) {
+      clearServerError("password");
+      clearServerError("captchaCode");
       loading.value = true;
       useUserStoreHook()
         .loginByUsername({
@@ -82,24 +109,11 @@ const onLogin = async (formEl: FormInstance | undefined) => {
                 .finally(() => (disabled.value = false));
             });
           } else {
-            message("登录失败", { type: "error" });
+            serverErrors.password = "登录失败，请稍后重试";
           }
         })
         .catch(error => {
-          const errData = error?.response?.data?.errors;
-          if (errData?.message) {
-            let msg = errData.message;
-            if (errData.details?.remainingAttempts != null) {
-              msg += `，剩余尝试次数：${errData.details.remainingAttempts}`;
-            }
-            if (errData.details?.retryAfter != null) {
-              const mins = Math.ceil(errData.details.retryAfter / 60);
-              msg += `，请${mins}分钟后再试`;
-            }
-            message(msg, { type: "error" });
-          } else {
-            message("登录失败，请稍后重试", { type: "error" });
-          }
+          showLoginError(error);
           // 验证码错误或登录失败后，验证码已被后端一次性消费，必须刷新
           if (captchaEnabled.value) {
             refreshCaptcha();
@@ -177,24 +191,29 @@ useEventListener(document, "keydown", ({ code }) => {
             </Motion>
 
             <Motion :delay="150">
-              <el-form-item prop="password">
+              <el-form-item prop="password" :error="serverErrors.password">
                 <el-input
                   v-model="ruleForm.password"
                   clearable
                   show-password
                   placeholder="密码"
                   :prefix-icon="useRenderIcon(Lock)"
+                  @input="clearServerError('password')"
                 />
               </el-form-item>
             </Motion>
 
             <Motion v-if="captchaEnabled" :delay="200">
-              <el-form-item prop="captchaCode">
+              <el-form-item
+                prop="captchaCode"
+                :error="serverErrors.captchaCode"
+              >
                 <el-input
                   v-model="ruleForm.captchaCode"
                   clearable
                   placeholder="验证码"
                   :prefix-icon="useRenderIcon(Keyhole)"
+                  @input="clearServerError('captchaCode')"
                 >
                   <template v-slot:append>
                     <ReCaptcha
