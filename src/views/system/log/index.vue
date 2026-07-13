@@ -200,7 +200,7 @@ onMounted(() => {
   <div class="log-container">
     <el-card shadow="never" class="search-card">
       <el-form :inline="true" :model="searchForm" class="search-form">
-        <el-form-item label="用户名">
+        <el-form-item label="用户名" class="filter-item filter-item--input">
           <el-input
             v-model="searchForm.username"
             placeholder="请输入用户名"
@@ -208,12 +208,11 @@ onMounted(() => {
             @keyup.enter="handleSearch"
           />
         </el-form-item>
-        <el-form-item label="登录结果">
+        <el-form-item label="登录结果" class="filter-item filter-item--select">
           <el-select
             v-model="searchForm.result"
             placeholder="全部结果"
             clearable
-            style="width: 140px"
           >
             <el-option label="全部" value="" />
             <el-option
@@ -224,7 +223,7 @@ onMounted(() => {
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="登录IP">
+        <el-form-item label="登录IP" class="filter-item filter-item--input">
           <el-input
             v-model="searchForm.loginIp"
             placeholder="请输入登录IP"
@@ -232,7 +231,7 @@ onMounted(() => {
             @keyup.enter="handleSearch"
           />
         </el-form-item>
-        <el-form-item label="登录时间">
+        <el-form-item label="登录时间" class="filter-item filter-item--date">
           <el-date-picker
             v-model="searchForm.loggedAtRange"
             type="datetimerange"
@@ -243,7 +242,7 @@ onMounted(() => {
             clearable
           />
         </el-form-item>
-        <el-form-item>
+        <el-form-item class="filter-actions">
           <el-button type="primary" @click="handleSearch">
             <IconifyIconOnline icon="ep:search" />
             搜索
@@ -319,8 +318,43 @@ onMounted(() => {
     margin-bottom: 8px;
 
     .search-form {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 28px;
+      align-items: flex-start;
+
       :deep(.el-form-item) {
+        flex: 0 0 auto;
+        margin-right: 0;
         margin-bottom: 0;
+      }
+
+      :deep(.el-form-item__label) {
+        font-weight: 600;
+      }
+
+      .filter-item--input {
+        :deep(.el-input) {
+          width: 260px;
+        }
+      }
+
+      .filter-item--select {
+        :deep(.el-select) {
+          width: 180px;
+        }
+      }
+
+      .filter-item--date {
+        :deep(.el-date-editor) {
+          width: 500px;
+        }
+      }
+
+      .filter-actions {
+        :deep(.el-form-item__content) {
+          gap: 8px;
+        }
       }
     }
   }
@@ -330,6 +364,28 @@ onMounted(() => {
       display: flex;
       justify-content: flex-end;
       margin-top: 16px;
+    }
+  }
+}
+
+@media (width <= 768px) {
+  .log-container {
+    .search-card {
+      .search-form {
+        gap: 12px;
+
+        .filter-item--input,
+        .filter-item--select,
+        .filter-item--date {
+          width: 100%;
+
+          :deep(.el-input),
+          :deep(.el-select),
+          :deep(.el-date-editor) {
+            width: 100%;
+          }
+        }
+      }
     }
   }
 }
