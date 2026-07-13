@@ -107,6 +107,7 @@ export const logoutApi = () => {
 // ==================== 用户管理 CRUD ====================
 
 export type StatusCode = 0 | 1;
+export type GenderCode = 0 | 1 | 2;
 
 /** 用户记录 */
 export type UserRecord = {
@@ -117,6 +118,8 @@ export type UserRecord = {
   email: string;
   /** 手机号 */
   phone: string | null;
+  /** 性别：0 未知，1 男，2 女 */
+  gender: GenderCode;
   /** 启用状态：1 启用，0 禁用 */
   status: StatusCode;
   /** 角色代码列表 */
@@ -135,6 +138,10 @@ export type UserFormData = {
   username: string;
   /** 邮箱 */
   email: string;
+  /** 手机号 */
+  phone?: string;
+  /** 性别：0 未知，1 男，2 女 */
+  gender?: GenderCode;
   /** 密码（新增时必填，编辑时留空表示不修改） */
   password?: string;
   /** 启用状态：1 启用，0 禁用 */
@@ -149,6 +156,10 @@ export type UserProfileFormData = {
   username: string;
   /** 邮箱 */
   email: string;
+  /** 手机号 */
+  phone?: string;
+  /** 性别：0 未知，1 男，2 女 */
+  gender?: GenderCode;
 };
 
 /** 重置密码参数 */
@@ -253,6 +264,7 @@ export type CurrentUserResult = {
     username: string;
     email: string;
     phone: string | null;
+    gender: GenderCode;
     status: StatusCode;
     roles: string[];
     lastLoginAt: string | null;

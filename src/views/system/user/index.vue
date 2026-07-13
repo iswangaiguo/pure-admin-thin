@@ -11,6 +11,7 @@ import {
   getUserList,
   getAssignableRoles,
   deleteUser,
+  type GenderCode,
   type StatusCode,
   type UserRecord
 } from "@/api/user";
@@ -73,6 +74,18 @@ const columns = ref<TableColumns[]>([
     prop: "email",
     minWidth: 180,
     showOverflowTooltip: true
+  },
+  {
+    label: "手机号码",
+    prop: "phone",
+    width: 130
+  },
+  {
+    label: "性别",
+    prop: "gender",
+    slot: "gender",
+    width: 80,
+    align: "center"
   },
   {
     label: "状态",
@@ -210,6 +223,10 @@ function getRoleName(code: string): string {
   return roleOptions.value.find(r => r.code === code)?.name || code;
 }
 
+function genderLabel(gender: GenderCode): string {
+  return { 0: "未知", 1: "男", 2: "女" }[gender];
+}
+
 // ==================== 搜索操作 ====================
 
 function handleSearch() {
@@ -336,6 +353,9 @@ onMounted(() => {
               >
                 {{ row.status === 1 ? "正常" : "禁用" }}
               </el-tag>
+            </template>
+            <template #gender="{ row }">
+              {{ genderLabel(row.gender) }}
             </template>
             <template #role="{ row }">
               <template v-if="row.roles && row.roles.length">

@@ -8,6 +8,7 @@ import {
   resetUserPassword,
   updateUser,
   updateUserStatus,
+  type GenderCode,
   type StatusCode,
   type UserRecord
 } from "@/api/user";
@@ -51,6 +52,8 @@ const PASSWORD_MIN_LENGTH = 8;
 const initialFormData = ref({
   username: "",
   email: "",
+  phone: "",
+  gender: 0 as GenderCode,
   status: 1 as StatusCode,
   roles: [] as string[]
 });
@@ -58,12 +61,16 @@ const initialFormData = ref({
 const formData = reactive<{
   username: string;
   email: string;
+  phone: string;
+  gender: GenderCode;
   password: string;
   status: StatusCode;
   roles: string[];
 }>({
   username: "",
   email: "",
+  phone: "",
+  gender: 0,
   password: "",
   status: 1,
   roles: []
@@ -88,6 +95,8 @@ const canAssignRoles = computed(
 function resetForm() {
   formData.username = "";
   formData.email = "";
+  formData.phone = "";
+  formData.gender = 0;
   formData.password = "";
   formData.status = 1;
   formData.roles = [];
@@ -95,6 +104,8 @@ function resetForm() {
   initialFormData.value = {
     username: "",
     email: "",
+    phone: "",
+    gender: 0,
     status: 1,
     roles: []
   };
@@ -107,11 +118,15 @@ function initForm() {
     editingId.value = props.editRow.id;
     formData.username = props.editRow.username;
     formData.email = props.editRow.email;
+    formData.phone = props.editRow.phone || "";
+    formData.gender = props.editRow.gender;
     formData.status = props.editRow.status;
     formData.roles = [...(props.editRow.roles || [])];
     initialFormData.value = {
       username: props.editRow.username,
       email: props.editRow.email,
+      phone: props.editRow.phone || "",
+      gender: props.editRow.gender,
       status: props.editRow.status,
       roles: [...(props.editRow.roles || [])]
     };
@@ -141,6 +156,9 @@ function validationError(): string {
   if (canEditProfile.value) {
     if (!formData.username.trim()) return "请输入用户名";
     if (!formData.email.trim()) return "请输入邮箱";
+    if (formData.phone.trim() && !/^\d{11}$/.test(formData.phone.trim())) {
+      return "请输入 11 位手机号";
+    }
   }
 
   if (props.mode === "create") return passwordError(formData.password);
@@ -163,7 +181,9 @@ function changedSections(): UserEditSection[] {
   if (
     canEditProfile.value &&
     (formData.username.trim() !== initial.username ||
-      formData.email.trim() !== initial.email)
+      formData.email.trim() !== initial.email ||
+      formData.phone.trim() !== initial.phone ||
+      formData.gender !== initial.gender)
   ) {
     changed.push("profile");
   }
@@ -206,6 +226,8 @@ async function handleSubmit() {
       const response = await createUser({
         username: formData.username.trim(),
         email: formData.email.trim(),
+        phone: formData.phone.trim(),
+        gender: formData.gender,
         password: formData.password
       });
       latestUser = response.data;
@@ -220,7 +242,9 @@ async function handleSubmit() {
       if (changed.includes("profile")) {
         const response = await updateUser(editingId.value, {
           username: formData.username.trim(),
-          email: formData.email.trim()
+          email: formData.email.trim(),
+          phone: formData.phone.trim(),
+          gender: formData.gender
         });
         latestUser = response.data;
         completed.push("profile");
@@ -302,6 +326,20 @@ async function handleSubmit() {
             placeholder="请输入邮箱"
             maxlength="100"
           />
+        </el-form-item>
+        <el-form-item label="手机号码">
+          <el-input
+            v-model="formData.phone"
+            placeholder="请输入 11 位手机号"
+            maxlength="11"
+          />
+        </el-form-item>
+        <el-form-item label="性别">
+          <el-radio-group v-model="formData.gender">
+            <el-radio :value="0">未知</el-radio>
+            <el-radio :value="1">男</el-radio>
+            <el-radio :value="2">女</el-radio>
+          </el-radio-group>
         </el-form-item>
       </template>
 
