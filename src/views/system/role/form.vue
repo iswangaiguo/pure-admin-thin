@@ -2,6 +2,11 @@
 import { computed, nextTick, reactive, ref, watch } from "vue";
 import { message } from "@/utils/message";
 import {
+  applyApiFieldErrors,
+  isServerError,
+  parseApiError
+} from "@/utils/formError";
+import {
   createRole,
   updateRole,
   updateRoleMenus,
@@ -15,6 +20,11 @@ defineOptions({
 });
 
 type RoleFormMode = "create" | "metadata" | "permissions";
+type RoleFormField = "code" | "name" | "status" | "menus";
+type ValidationIssue = {
+  field?: RoleFormField;
+  message: string;
+};
 
 type RoleFormSuccess = {
   kind: RoleFormMode;
@@ -51,6 +61,19 @@ const defaultFormData: RoleFormData = {
 
 const formData = reactive<RoleFormData>({ ...defaultFormData });
 const editingId = ref<number | null>(null);
+const fieldErrors = reactive<Record<RoleFormField, string>>({
+  code: "",
+  name: "",
+  status: "",
+  menus: ""
+});
+const roleApiFieldMap: Record<string, RoleFormField> = {
+  code: "code",
+  name: "name",
+  status: "status",
+  menus: "menus",
+  menuIds: "menus"
+};
 
 const isCreate = computed(() => props.mode === "create");
 const isPermissionMode = computed(() => props.mode === "permissions");
@@ -60,7 +83,18 @@ const dialogTitle = computed(() => {
   return "新增角色";
 });
 
+function clearFieldError(field: RoleFormField) {
+  fieldErrors[field] = "";
+}
+
+function clearFieldErrors() {
+  Object.keys(fieldErrors).forEach(field => {
+    clearFieldError(field as RoleFormField);
+  });
+}
+
 function resetForm() {
+  clearFieldErrors();
   Object.assign(formData, { ...defaultFormData });
   editingId.value = null;
   treeRef.value?.setCheckedKeys([]);
@@ -104,13 +138,17 @@ function handleCancel() {
   emit("update:visible", false);
 }
 
-function validationError(): string {
+function validationError(): ValidationIssue | null {
   if (isPermissionMode.value) {
-    return editingId.value ? "" : "未找到要分配权限的角色";
+    return editingId.value ? null : { message: "未找到要分配权限的角色" };
   }
-  if (!formData.code) return "请输入角色标识";
-  if (!formData.name) return "请输入角色名称";
-  return "";
+  if (!formData.code.trim()) {
+    return { field: "code", message: "请输入角色标识" };
+  }
+  if (!formData.name.trim()) {
+    return { field: "name", message: "请输入角色名称" };
+  }
+  return null;
 }
 
 function failureMessage(): string {
@@ -119,10 +157,26 @@ function failureMessage(): string {
   return "角色创建失败";
 }
 
+function showApiError(error: unknown) {
+  const apiError = parseApiError(error, failureMessage());
+  const hasFieldErrors =
+    !isServerError(apiError.status) &&
+    applyApiFieldErrors(fieldErrors, apiError.fieldErrors, roleApiFieldMap);
+
+  if (!hasFieldErrors) {
+    message(apiError.message, { type: "error" });
+  }
+}
+
 async function handleSubmit() {
-  const error = validationError();
-  if (error) {
-    message(error, { type: "warning" });
+  clearFieldErrors();
+  const issue = validationError();
+  if (issue) {
+    if (issue.field) {
+      fieldErrors[issue.field] = issue.message;
+    } else {
+      message(issue.message, { type: "warning" });
+    }
     return;
   }
 
@@ -156,9 +210,9 @@ async function handleSubmit() {
 
     emit("update:visible", false);
     emit("success", { kind: props.mode, role });
-  } catch {
+  } catch (error) {
     // 每个模式只执行一个命令，因此不会把部分成功误报为整体失败。
-    message(failureMessage(), { type: "error" });
+    showApiError(error);
   } finally {
     submitLoading.value = false;
   }
@@ -177,26 +231,29 @@ async function handleSubmit() {
   >
     <el-form :model="formData" label-width="90px" class="role-form">
       <template v-if="!isPermissionMode">
-        <el-form-item label="角色标识">
+        <el-form-item label="角色标识" :error="fieldErrors.code">
           <el-input
             v-model="formData.code"
             placeholder="请输入角色标识，如 auditor"
             :disabled="!isCreate"
             maxlength="50"
+            @input="clearFieldError('code')"
           />
         </el-form-item>
-        <el-form-item label="角色名称">
+        <el-form-item label="角色名称" :error="fieldErrors.name">
           <el-input
             v-model="formData.name"
             placeholder="请输入角色名称"
             maxlength="50"
+            @input="clearFieldError('name')"
           />
         </el-form-item>
-        <el-form-item label="状态">
+        <el-form-item label="状态" :error="fieldErrors.status">
           <el-switch
             v-model="formData.status"
             :active-value="1"
             :inactive-value="0"
+            @change="clearFieldError('status')"
           />
         </el-form-item>
       </template>
@@ -210,7 +267,11 @@ async function handleSubmit() {
           show-icon
           class="permission-alert"
         />
-        <el-form-item label="权限节点" class="menu-permission-item">
+        <el-form-item
+          label="权限节点"
+          class="menu-permission-item"
+          :error="fieldErrors.menus"
+        >
           <div class="menu-tree-container">
             <el-tree
               ref="treeRef"
@@ -221,6 +282,7 @@ async function handleSubmit() {
               check-strictly
               default-expand-all
               class="menu-tree"
+              @check="clearFieldError('menus')"
             >
               <template #default="{ data }">
                 <span class="permission-node">

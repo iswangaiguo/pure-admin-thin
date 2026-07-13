@@ -2,6 +2,11 @@
 import { computed, ref, reactive, watch } from "vue";
 import { message } from "@/utils/message";
 import {
+  applyApiFieldErrors,
+  isServerError,
+  parseApiError
+} from "@/utils/formError";
+import {
   createMenu,
   updateMenu,
   updateMenuPerms,
@@ -15,6 +20,17 @@ defineOptions({
 });
 
 type MenuFormMode = "create" | "metadata" | "permissions";
+type MenuFormField =
+  | "parentId"
+  | "menuType"
+  | "title"
+  | "path"
+  | "component"
+  | "icon"
+  | "rank"
+  | "visible"
+  | "status"
+  | "perms";
 type MenuFormSuccess = {
   kind: MenuFormMode;
   menu: MenuRecord;
@@ -144,6 +160,30 @@ const formData = reactive<MenuFormData>({ ...defaultFormData });
 const permsValue = ref<string>("");
 const editingId = ref<number | null>(null);
 const isEdit = ref(false);
+const fieldErrors = reactive<Record<MenuFormField, string>>({
+  parentId: "",
+  menuType: "",
+  title: "",
+  path: "",
+  component: "",
+  icon: "",
+  rank: "",
+  visible: "",
+  status: "",
+  perms: ""
+});
+const menuApiFieldMap: Record<string, MenuFormField> = {
+  parentId: "parentId",
+  menuType: "menuType",
+  title: "title",
+  path: "path",
+  component: "component",
+  icon: "icon",
+  rank: "rank",
+  visible: "visible",
+  status: "status",
+  perms: "perms"
+};
 
 const isPermissionMode = computed(() => props.mode === "permissions");
 const dialogTitle = computed(() => {
@@ -152,7 +192,18 @@ const dialogTitle = computed(() => {
   return "新增菜单";
 });
 
+function clearFieldError(field: MenuFormField) {
+  fieldErrors[field] = "";
+}
+
+function clearFieldErrors() {
+  Object.keys(fieldErrors).forEach(field => {
+    clearFieldError(field as MenuFormField);
+  });
+}
+
 function resetForm() {
+  clearFieldErrors();
   Object.assign(formData, cloneDeep(defaultFormData));
   permsValue.value = "";
   editingId.value = null;
@@ -200,15 +251,30 @@ function handleCancel() {
 
 function selectIcon(icon: string) {
   formData.icon = icon;
+  clearFieldError("icon");
   iconPopoverVisible.value = false;
 }
 
 function clearIcon() {
   formData.icon = "";
+  clearFieldError("icon");
   iconPopoverVisible.value = false;
 }
 
+function showApiError(error: unknown, fallbackMessage: string) {
+  const apiError = parseApiError(error, fallbackMessage);
+  const hasFieldErrors =
+    !isServerError(apiError.status) &&
+    applyApiFieldErrors(fieldErrors, apiError.fieldErrors, menuApiFieldMap);
+
+  if (!hasFieldErrors) {
+    message(apiError.message, { type: "error" });
+  }
+}
+
 async function handleSubmit() {
+  clearFieldErrors();
+
   if (isPermissionMode.value) {
     if (!editingId.value) {
       message("未找到要配置权限的节点", { type: "warning" });
@@ -223,8 +289,8 @@ async function handleSubmit() {
       message("权限标识更新成功", { type: "success" });
       emit("update:visible", false);
       emit("success", { kind: "permissions", menu: response.data });
-    } catch {
-      message("权限标识更新失败", { type: "error" });
+    } catch (error) {
+      showApiError(error, "权限标识更新失败");
     } finally {
       submitLoading.value = false;
     }
@@ -232,15 +298,15 @@ async function handleSubmit() {
   }
 
   if (!formData.title) {
-    message("请输入菜单名称", { type: "warning" });
+    fieldErrors.title = "请输入菜单名称";
     return;
   }
   if (!formData.path) {
-    message("请输入路由地址", { type: "warning" });
+    fieldErrors.path = "请输入路由地址";
     return;
   }
   if (formData.menuType === "C" && !formData.component) {
-    message("请输入组件路径", { type: "warning" });
+    fieldErrors.component = "请输入组件路径";
     return;
   }
 
@@ -264,10 +330,8 @@ async function handleSubmit() {
     }
     emit("update:visible", false);
     emit("success", { kind: props.mode, menu });
-  } catch {
-    message(isEdit.value ? "菜单资料修改失败" : "菜单创建失败", {
-      type: "error"
-    });
+  } catch (error) {
+    showApiError(error, isEdit.value ? "菜单资料修改失败" : "菜单创建失败");
   } finally {
     submitLoading.value = false;
   }
@@ -286,7 +350,7 @@ async function handleSubmit() {
   >
     <el-form :model="formData" label-width="100px" class="menu-form">
       <template v-if="!isPermissionMode">
-        <el-form-item label="上级菜单">
+        <el-form-item label="上级菜单" :error="fieldErrors.parentId">
           <el-tree-select
             v-model="formData.parentId"
             :data="treeSelectData"
@@ -295,26 +359,32 @@ async function handleSubmit() {
             clearable
             check-strictly
             style="width: 100%"
+            @change="clearFieldError('parentId')"
           />
         </el-form-item>
 
-        <el-form-item label="菜单类型">
-          <el-radio-group v-model="formData.menuType" :disabled="isEdit">
+        <el-form-item label="菜单类型" :error="fieldErrors.menuType">
+          <el-radio-group
+            v-model="formData.menuType"
+            :disabled="isEdit"
+            @change="clearFieldError('menuType')"
+          >
             <el-radio-button value="M">目录</el-radio-button>
             <el-radio-button value="C">菜单</el-radio-button>
             <el-radio-button value="F">按钮</el-radio-button>
           </el-radio-group>
         </el-form-item>
 
-        <el-form-item label="菜单名称">
+        <el-form-item label="菜单名称" :error="fieldErrors.title">
           <el-input
             v-model="formData.title"
             placeholder="请输入菜单名称"
             maxlength="50"
+            @input="clearFieldError('title')"
           />
         </el-form-item>
 
-        <el-form-item label="路由地址">
+        <el-form-item label="路由地址" :error="fieldErrors.path">
           <el-input
             v-model="formData.path"
             :placeholder="
@@ -324,17 +394,27 @@ async function handleSubmit() {
                   ? '路由路径，如 /system/user'
                   : '权限节点路径，如 /system/user/create'
             "
+            @input="clearFieldError('path')"
           />
         </el-form-item>
 
-        <el-form-item v-if="formData.menuType === 'C'" label="组件路径">
+        <el-form-item
+          v-if="formData.menuType === 'C'"
+          label="组件路径"
+          :error="fieldErrors.component"
+        >
           <el-input
             v-model="formData.component"
             placeholder="如 system/user/index"
+            @input="clearFieldError('component')"
           />
         </el-form-item>
 
-        <el-form-item v-if="formData.menuType !== 'F'" label="菜单图标">
+        <el-form-item
+          v-if="formData.menuType !== 'F'"
+          label="菜单图标"
+          :error="fieldErrors.icon"
+        >
           <el-popover
             v-model:visible="iconPopoverVisible"
             placement="bottom-start"
@@ -385,22 +465,35 @@ async function handleSubmit() {
           </el-popover>
         </el-form-item>
 
-        <el-form-item label="显示排序">
-          <el-input-number v-model="formData.rank" :min="0" :max="999" />
+        <el-form-item label="显示排序" :error="fieldErrors.rank">
+          <el-input-number
+            v-model="formData.rank"
+            :min="0"
+            :max="999"
+            @change="clearFieldError('rank')"
+          />
         </el-form-item>
 
-        <el-form-item v-if="formData.menuType !== 'F'" label="显示状态">
-          <el-radio-group v-model="formData.visible">
+        <el-form-item
+          v-if="formData.menuType !== 'F'"
+          label="显示状态"
+          :error="fieldErrors.visible"
+        >
+          <el-radio-group
+            v-model="formData.visible"
+            @change="clearFieldError('visible')"
+          >
             <el-radio :value="true">显示</el-radio>
             <el-radio :value="false">隐藏</el-radio>
           </el-radio-group>
         </el-form-item>
 
-        <el-form-item label="菜单状态">
+        <el-form-item label="菜单状态" :error="fieldErrors.status">
           <el-switch
             v-model="formData.status"
             :active-value="1"
             :inactive-value="0"
+            @change="clearFieldError('status')"
           />
         </el-form-item>
       </template>
@@ -414,11 +507,12 @@ async function handleSubmit() {
           show-icon
           class="permission-alert"
         />
-        <el-form-item label="权限标识">
+        <el-form-item label="权限标识" :error="fieldErrors.perms">
           <el-input
             v-model="permsValue"
             placeholder="如 user:create；多个权限使用英文逗号分隔"
             clearable
+            @input="clearFieldError('perms')"
           />
         </el-form-item>
       </template>

@@ -3,6 +3,11 @@ import { computed, reactive, ref, watch } from "vue";
 import { hasPerms } from "@/utils/auth";
 import { message } from "@/utils/message";
 import {
+  applyApiFieldErrors,
+  isServerError,
+  parseApiError
+} from "@/utils/formError";
+import {
   assignUserRoles,
   createUser,
   resetUserPassword,
@@ -20,6 +25,18 @@ defineOptions({
 
 type UserFormMode = "create" | "edit";
 type UserEditSection = "profile" | "password" | "status" | "roles";
+type UserFormField =
+  | "username"
+  | "email"
+  | "phone"
+  | "gender"
+  | "password"
+  | "status"
+  | "roles";
+type ValidationIssue = {
+  field?: UserFormField;
+  message: string;
+};
 type UserFormSuccess = {
   kind: UserFormMode;
   user: UserRecord;
@@ -75,6 +92,24 @@ const formData = reactive<{
   status: 1,
   roles: []
 });
+const fieldErrors = reactive<Record<UserFormField, string>>({
+  username: "",
+  email: "",
+  phone: "",
+  gender: "",
+  password: "",
+  status: "",
+  roles: ""
+});
+const userApiFieldMap: Record<string, UserFormField> = {
+  username: "username",
+  email: "email",
+  phone: "phone",
+  gender: "gender",
+  password: "password",
+  status: "status",
+  roles: "roles"
+};
 
 const dialogTitle = computed(() =>
   props.mode === "edit" ? "编辑用户" : "新增用户"
@@ -92,7 +127,18 @@ const canAssignRoles = computed(
   () => props.mode === "edit" && hasPerms("user:assign_roles")
 );
 
+function clearFieldError(field: UserFormField) {
+  fieldErrors[field] = "";
+}
+
+function clearFieldErrors() {
+  Object.keys(fieldErrors).forEach(field => {
+    clearFieldError(field as UserFormField);
+  });
+}
+
 function resetForm() {
+  clearFieldErrors();
   formData.username = "";
   formData.email = "";
   formData.phone = "";
@@ -152,22 +198,41 @@ function passwordError(password: string) {
   return "";
 }
 
-function validationError(): string {
+function validationError(): ValidationIssue | null {
   if (canEditProfile.value) {
-    if (!formData.username.trim()) return "请输入用户名";
-    if (!formData.email.trim()) return "请输入邮箱";
+    if (!formData.username.trim()) {
+      return { field: "username", message: "请输入用户名" };
+    }
+    if (!formData.email.trim()) {
+      return { field: "email", message: "请输入邮箱" };
+    }
     if (formData.phone.trim() && !/^\d{11}$/.test(formData.phone.trim())) {
-      return "请输入 11 位手机号";
+      return { field: "phone", message: "请输入 11 位手机号" };
     }
   }
 
-  if (props.mode === "create") return passwordError(formData.password);
-
-  if (canResetPassword.value && formData.password !== "") {
-    return passwordError(formData.password);
+  if (props.mode === "create") {
+    const error = passwordError(formData.password);
+    return error ? { field: "password", message: error } : null;
   }
 
-  return !editingId.value ? "未找到要操作的用户" : "";
+  if (canResetPassword.value && formData.password !== "") {
+    const error = passwordError(formData.password);
+    if (error) return { field: "password", message: error };
+  }
+
+  return !editingId.value ? { message: "未找到要操作的用户" } : null;
+}
+
+function showApiError(error: unknown, fallbackMessage: string) {
+  const apiError = parseApiError(error, fallbackMessage);
+  const hasFieldErrors =
+    !isServerError(apiError.status) &&
+    applyApiFieldErrors(fieldErrors, apiError.fieldErrors, userApiFieldMap);
+
+  if (!hasFieldErrors) {
+    message(apiError.message, { type: "error" });
+  }
 }
 
 function sameRoles(left: string[], right: string[]): boolean {
@@ -211,9 +276,14 @@ function sectionNames(sections: UserEditSection[]): string {
 }
 
 async function handleSubmit() {
-  const error = validationError();
-  if (error) {
-    message(error, { type: "warning" });
+  clearFieldErrors();
+  const issue = validationError();
+  if (issue) {
+    if (issue.field) {
+      fieldErrors[issue.field] = issue.message;
+    } else {
+      message(issue.message, { type: "warning" });
+    }
     return;
   }
 
@@ -278,7 +348,7 @@ async function handleSubmit() {
     if (!latestUser) throw new Error("missing user response");
     emit("update:visible", false);
     emit("success", { kind: props.mode, user: latestUser, changed: completed });
-  } catch {
+  } catch (error) {
     if (completed.length > 0 && latestUser) {
       emit("update:visible", false);
       emit("success", {
@@ -291,9 +361,10 @@ async function handleSubmit() {
         type: "warning"
       });
     } else {
-      message(props.mode === "create" ? "用户创建失败" : "用户修改失败", {
-        type: "error"
-      });
+      showApiError(
+        error,
+        props.mode === "create" ? "用户创建失败" : "用户修改失败"
+      );
     }
   } finally {
     submitLoading.value = false;
@@ -313,29 +384,35 @@ async function handleSubmit() {
   >
     <el-form :model="formData" label-width="90px" class="user-form">
       <template v-if="canEditProfile">
-        <el-form-item label="用户名">
+        <el-form-item label="用户名" :error="fieldErrors.username">
           <el-input
             v-model="formData.username"
             placeholder="请输入用户名"
             maxlength="50"
+            @input="clearFieldError('username')"
           />
         </el-form-item>
-        <el-form-item label="邮箱">
+        <el-form-item label="邮箱" :error="fieldErrors.email">
           <el-input
             v-model="formData.email"
             placeholder="请输入邮箱"
             maxlength="100"
+            @input="clearFieldError('email')"
           />
         </el-form-item>
-        <el-form-item label="手机号码">
+        <el-form-item label="手机号码" :error="fieldErrors.phone">
           <el-input
             v-model="formData.phone"
             placeholder="请输入 11 位手机号"
             maxlength="11"
+            @input="clearFieldError('phone')"
           />
         </el-form-item>
-        <el-form-item label="性别">
-          <el-radio-group v-model="formData.gender">
+        <el-form-item label="性别" :error="fieldErrors.gender">
+          <el-radio-group
+            v-model="formData.gender"
+            @change="clearFieldError('gender')"
+          >
             <el-radio :value="0">未知</el-radio>
             <el-radio :value="1">男</el-radio>
             <el-radio :value="2">女</el-radio>
@@ -346,6 +423,7 @@ async function handleSubmit() {
       <el-form-item
         v-if="canResetPassword"
         :label="mode === 'create' ? '密码' : '新密码'"
+        :error="fieldErrors.password"
       >
         <el-input
           v-model="formData.password"
@@ -355,19 +433,31 @@ async function handleSubmit() {
           "
           maxlength="50"
           show-password
+          @input="clearFieldError('password')"
         />
       </el-form-item>
 
       <el-divider v-if="mode === 'edit' && (canEditStatus || canAssignRoles)" />
 
-      <el-form-item v-if="canEditStatus" label="用户状态">
-        <el-radio-group v-model="formData.status">
+      <el-form-item
+        v-if="canEditStatus"
+        label="用户状态"
+        :error="fieldErrors.status"
+      >
+        <el-radio-group
+          v-model="formData.status"
+          @change="clearFieldError('status')"
+        >
           <el-radio :value="1">正常</el-radio>
           <el-radio :value="0">禁用</el-radio>
         </el-radio-group>
       </el-form-item>
 
-      <el-form-item v-if="canAssignRoles" label="用户角色">
+      <el-form-item
+        v-if="canAssignRoles"
+        label="用户角色"
+        :error="fieldErrors.roles"
+      >
         <el-select
           v-model="formData.roles"
           multiple
@@ -376,6 +466,7 @@ async function handleSubmit() {
           style="width: 100%"
           collapse-tags
           collapse-tags-tooltip
+          @change="clearFieldError('roles')"
         >
           <el-option
             v-for="item in roleOptions"
