@@ -10,18 +10,26 @@ import { storageLocal } from "@pureadmin/utils";
 import {
   getUserList,
   getAssignableRoles,
+  getAssignableDepartments,
+  getDepartmentOptions,
   deleteUser,
   type GenderCode,
   type StatusCode,
   type UserRecord
 } from "@/api/user";
 import type { RoleRecord } from "@/api/role";
+import type { DepartmentOption } from "@/api/department";
 import { formatDateTime } from "@/utils/date";
 import type { TableColumns } from "@pureadmin/table";
 import UserForm from "./form.vue";
 
 type UserFormMode = "create" | "edit";
-type UserEditSection = "profile" | "password" | "status" | "roles";
+type UserEditSection =
+  | "profile"
+  | "password"
+  | "status"
+  | "roles"
+  | "department";
 type UserFormSuccess = {
   kind: UserFormMode;
   user: UserRecord;
@@ -36,6 +44,7 @@ defineOptions({
 // ==================== 状态 ====================
 
 const tableRef = ref<any>(null);
+const departmentTreeRef = ref<any>(null);
 const tableData = ref<UserRecord[]>([]);
 const loading = ref(false);
 
@@ -54,6 +63,9 @@ const pagination = reactive({
 });
 
 const roleOptions = ref<RoleRecord[]>([]);
+const departmentOptions = ref<DepartmentOption[]>([]);
+const departmentFilterOptions = ref<DepartmentOption[]>([]);
+const departmentFilter = ref<number | "unassigned" | null>(null);
 
 // ==================== 表格列定义 ====================
 
@@ -102,6 +114,12 @@ const columns = ref<TableColumns[]>([
     align: "center"
   },
   {
+    label: "部门",
+    prop: "department",
+    slot: "department",
+    minWidth: 130
+  },
+  {
     label: "创建时间",
     prop: "createdAt",
     width: 180,
@@ -145,7 +163,8 @@ function canEditUser(): boolean {
     "user:update",
     "user:reset_password",
     "user:update_status",
-    "user:assign_roles"
+    "user:assign_roles",
+    "user:assign_department"
   ].some(hasPerms);
 }
 
@@ -194,6 +213,9 @@ async function fetchUsers() {
     };
     if (searchForm.keyword) params.keyword = searchForm.keyword;
     if (searchForm.status !== "") params.status = searchForm.status;
+    if (departmentFilter.value !== null) {
+      params.departmentId = departmentFilter.value;
+    }
     const res = await getUserList(params);
     tableData.value = res.data || [];
     pagination.total = res.meta?.total || 0;
@@ -219,6 +241,33 @@ async function fetchRoles() {
   }
 }
 
+async function fetchDepartmentTrees() {
+  try {
+    const response = await getDepartmentOptions();
+    departmentFilterOptions.value = response.data || [];
+  } catch {
+    departmentFilterOptions.value = [];
+  }
+
+  if (!hasPerms("user:assign_department")) {
+    departmentOptions.value = [];
+    return;
+  }
+
+  try {
+    const response = await getAssignableDepartments();
+    departmentOptions.value = response.data || [];
+  } catch {
+    departmentOptions.value = [];
+  }
+}
+
+function selectDepartment(data: { id: number | "unassigned" }) {
+  departmentFilter.value = data.id;
+  pagination.page = 1;
+  fetchUsers();
+}
+
 function getRoleName(code: string): string {
   return roleOptions.value.find(r => r.code === code)?.name || code;
 }
@@ -237,6 +286,8 @@ function handleSearch() {
 function handleReset() {
   searchForm.keyword = "";
   searchForm.status = "";
+  departmentFilter.value = null;
+  departmentTreeRef.value?.setCurrentKey(undefined);
   pagination.page = 1;
   fetchUsers();
 }
@@ -255,6 +306,7 @@ function handleSizeChange(size: number) {
 function onRefresh() {
   fetchUsers();
   fetchRoles();
+  fetchDepartmentTrees();
 }
 
 // ==================== 删除操作 ====================
@@ -277,143 +329,171 @@ async function handleDelete(row: UserRecord) {
 onMounted(() => {
   fetchUsers();
   fetchRoles();
+  fetchDepartmentTrees();
 });
 </script>
 
 <template>
   <div class="user-container">
-    <!-- 搜索区域 -->
-    <el-card shadow="never" class="search-card">
-      <el-form :inline="true" :model="searchForm" class="search-form">
-        <el-form-item label="关键词">
-          <el-input
-            v-model="searchForm.keyword"
-            placeholder="用户名 / 邮箱"
-            clearable
-            @keyup.enter="handleSearch"
+    <el-row :gutter="8">
+      <el-col :xs="24" :sm="6" :md="5" class="department-column">
+        <el-card shadow="never" class="department-card">
+          <template #header><span>部门组织</span></template>
+          <el-tree
+            ref="departmentTreeRef"
+            :data="[
+              ...departmentFilterOptions,
+              { id: 'unassigned', name: '未分配部门', children: [] }
+            ]"
+            node-key="id"
+            :props="{ label: 'name', children: 'children' }"
+            default-expand-all
+            highlight-current
+            @node-click="selectDepartment"
           />
-        </el-form-item>
-        <el-form-item label="状态">
-          <el-select
-            v-model="searchForm.status"
-            placeholder="用户状态"
-            clearable
-            style="width: 140px"
-          >
-            <el-option label="全部" value="" />
-            <el-option label="正常" :value="1" />
-            <el-option label="禁用" :value="0" />
-          </el-select>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="handleSearch">
-            <IconifyIconOnline icon="ep:search" />
-            搜索
-          </el-button>
-          <el-button @click="handleReset">
-            <IconifyIconOnline icon="ep:refresh" />
-            重置
-          </el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
-
-    <!-- 表格区域 -->
-    <el-card shadow="never" class="table-card">
-      <PureTableBar
-        :table-ref="tableRef"
-        :columns="columns"
-        @refresh="onRefresh"
-      >
-        <template #buttons>
-          <el-button
-            v-if="hasPerms('user:create')"
-            type="primary"
-            @click="openAddDialog"
-          >
-            <IconifyIconOnline icon="ep:plus" />
-            新增
-          </el-button>
-        </template>
-
-        <template #default="{ size, dynamicColumns }">
-          <pure-table
-            ref="tableRef"
-            :data="tableData"
-            :columns="dynamicColumns"
-            :size="size"
-            row-key="id"
-            :loading="loading"
-            border
-          >
-            <template #status="{ row }">
-              <el-tag
-                :type="row.status === 1 ? 'success' : 'danger'"
-                size="small"
+        </el-card>
+      </el-col>
+      <el-col :xs="24" :sm="18" :md="19">
+        <!-- 搜索区域 -->
+        <el-card shadow="never" class="search-card">
+          <el-form :inline="true" :model="searchForm" class="search-form">
+            <el-form-item label="关键词">
+              <el-input
+                v-model="searchForm.keyword"
+                placeholder="用户名 / 邮箱"
+                clearable
+                @keyup.enter="handleSearch"
+              />
+            </el-form-item>
+            <el-form-item label="状态">
+              <el-select
+                v-model="searchForm.status"
+                placeholder="用户状态"
+                clearable
+                style="width: 140px"
               >
-                {{ row.status === 1 ? "正常" : "禁用" }}
-              </el-tag>
-            </template>
-            <template #gender="{ row }">
-              {{ genderLabel(row.gender) }}
-            </template>
-            <template #role="{ row }">
-              <template v-if="row.roles && row.roles.length">
-                <el-tag
-                  v-for="roleKey in row.roles"
-                  :key="roleKey"
-                  size="small"
-                  class="mr-1"
-                >
-                  {{ getRoleName(roleKey) }}
-                </el-tag>
-              </template>
-              <span v-else class="text-gray-400">—</span>
-            </template>
-            <template #operation="{ row }">
-              <el-button
-                v-if="canEditUser()"
-                link
-                type="primary"
-                size="small"
-                @click="openEditDialog(row)"
-              >
-                编辑
+                <el-option label="全部" value="" />
+                <el-option label="正常" :value="1" />
+                <el-option label="禁用" :value="0" />
+              </el-select>
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="handleSearch">
+                <IconifyIconOnline icon="ep:search" />
+                搜索
               </el-button>
-              <el-popconfirm
-                v-if="hasPerms('user:delete')"
-                :title="'是否确认删除用户【' + row.username + '】？'"
-                @confirm="handleDelete(row)"
+              <el-button @click="handleReset">
+                <IconifyIconOnline icon="ep:refresh" />
+                重置
+              </el-button>
+            </el-form-item>
+          </el-form>
+        </el-card>
+
+        <!-- 表格区域 -->
+        <el-card shadow="never" class="table-card">
+          <PureTableBar
+            :table-ref="tableRef"
+            :columns="columns"
+            @refresh="onRefresh"
+          >
+            <template #buttons>
+              <el-button
+                v-if="hasPerms('user:create')"
+                type="primary"
+                @click="openAddDialog"
               >
-                <template #reference>
-                  <el-button link type="danger" size="small"> 删除 </el-button>
-                </template>
-              </el-popconfirm>
+                <IconifyIconOnline icon="ep:plus" />
+                新增
+              </el-button>
             </template>
-          </pure-table>
-        </template>
-      </PureTableBar>
 
-      <div class="pagination-wrapper">
-        <el-pagination
-          v-model:current-page="pagination.page"
-          v-model:page-size="pagination.pageSize"
-          :total="pagination.total"
-          :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
-          @current-change="handlePageChange"
-          @size-change="handleSizeChange"
+            <template #default="{ size, dynamicColumns }">
+              <pure-table
+                ref="tableRef"
+                :data="tableData"
+                :columns="dynamicColumns"
+                :size="size"
+                row-key="id"
+                :loading="loading"
+                border
+              >
+                <template #status="{ row }">
+                  <el-tag
+                    :type="row.status === 1 ? 'success' : 'danger'"
+                    size="small"
+                  >
+                    {{ row.status === 1 ? "正常" : "禁用" }}
+                  </el-tag>
+                </template>
+                <template #gender="{ row }">
+                  {{ genderLabel(row.gender) }}
+                </template>
+                <template #role="{ row }">
+                  <template v-if="row.roles && row.roles.length">
+                    <el-tag
+                      v-for="roleKey in row.roles"
+                      :key="roleKey"
+                      size="small"
+                      class="mr-1"
+                    >
+                      {{ getRoleName(roleKey) }}
+                    </el-tag>
+                  </template>
+                  <span v-else class="text-gray-400">—</span>
+                </template>
+                <template #department="{ row }">
+                  <span>{{ row.department?.name || "未分配" }}</span>
+                </template>
+                <template #operation="{ row }">
+                  <el-button
+                    v-if="canEditUser()"
+                    link
+                    type="primary"
+                    size="small"
+                    @click="openEditDialog(row)"
+                  >
+                    编辑
+                  </el-button>
+                  <el-popconfirm
+                    v-if="hasPerms('user:delete')"
+                    :title="'是否确认删除用户【' + row.username + '】？'"
+                    @confirm="handleDelete(row)"
+                  >
+                    <template #reference>
+                      <el-button link type="danger" size="small">
+                        删除
+                      </el-button>
+                    </template>
+                  </el-popconfirm>
+                </template>
+              </pure-table>
+            </template>
+          </PureTableBar>
+
+          <div class="pagination-wrapper">
+            <el-pagination
+              v-model:current-page="pagination.page"
+              v-model:page-size="pagination.pageSize"
+              :total="pagination.total"
+              :page-sizes="[10, 20, 50, 100]"
+              layout="total, sizes, prev, pager, next, jumper"
+              @current-change="handlePageChange"
+              @size-change="handleSizeChange"
+            />
+          </div>
+        </el-card>
+
+        <UserForm
+          v-model:visible="formVisible"
+          :mode="formMode"
+          :role-options="roleOptions"
+          :department-options="departmentOptions"
+          :edit-row="editRow"
+          @success="onFormSuccess"
         />
-      </div>
-    </el-card>
-
-    <UserForm
-      v-model:visible="formVisible"
-      :mode="formMode"
-      :role-options="roleOptions"
-      :edit-row="editRow"
-      @success="onFormSuccess"
-    />
+      </el-col>
+    </el-row>
   </div>
 </template>
 
@@ -437,6 +517,14 @@ onMounted(() => {
       justify-content: flex-end;
       margin-top: 16px;
     }
+  }
+
+  .department-card {
+    min-height: 300px;
+  }
+
+  .department-column {
+    margin-bottom: 8px;
   }
 }
 </style>

@@ -9,6 +9,7 @@ import {
 } from "@/utils/formError";
 import {
   assignUserRoles,
+  assignUserDepartment,
   createUser,
   resetUserPassword,
   updateUser,
@@ -24,7 +25,12 @@ defineOptions({
 });
 
 type UserFormMode = "create" | "edit";
-type UserEditSection = "profile" | "password" | "status" | "roles";
+type UserEditSection =
+  | "profile"
+  | "password"
+  | "status"
+  | "roles"
+  | "department";
 type UserFormField =
   | "username"
   | "email"
@@ -32,7 +38,8 @@ type UserFormField =
   | "gender"
   | "password"
   | "status"
-  | "roles";
+  | "roles"
+  | "departmentId";
 type ValidationIssue = {
   field?: UserFormField;
   message: string;
@@ -49,11 +56,13 @@ const props = withDefaults(
     visible: boolean;
     mode?: UserFormMode;
     roleOptions?: RoleRecord[];
+    departmentOptions?: import("@/api/department").DepartmentOption[];
     editRow?: UserRecord | null;
   }>(),
   {
     mode: "create",
     roleOptions: () => [],
+    departmentOptions: () => [],
     editRow: null
   }
 );
@@ -72,7 +81,8 @@ const initialFormData = ref({
   phone: "",
   gender: 0 as GenderCode,
   status: 1 as StatusCode,
-  roles: [] as string[]
+  roles: [] as string[],
+  departmentId: null as number | null
 });
 
 const formData = reactive<{
@@ -83,6 +93,7 @@ const formData = reactive<{
   password: string;
   status: StatusCode;
   roles: string[];
+  departmentId: number | null;
 }>({
   username: "",
   email: "",
@@ -90,7 +101,8 @@ const formData = reactive<{
   gender: 0,
   password: "",
   status: 1,
-  roles: []
+  roles: [],
+  departmentId: null
 });
 const fieldErrors = reactive<Record<UserFormField, string>>({
   username: "",
@@ -99,7 +111,8 @@ const fieldErrors = reactive<Record<UserFormField, string>>({
   gender: "",
   password: "",
   status: "",
-  roles: ""
+  roles: "",
+  departmentId: ""
 });
 const userApiFieldMap: Record<string, UserFormField> = {
   username: "username",
@@ -108,7 +121,8 @@ const userApiFieldMap: Record<string, UserFormField> = {
   gender: "gender",
   password: "password",
   status: "status",
-  roles: "roles"
+  roles: "roles",
+  departmentId: "departmentId"
 };
 
 const dialogTitle = computed(() =>
@@ -126,6 +140,33 @@ const canEditStatus = computed(
 const canAssignRoles = computed(
   () => props.mode === "edit" && hasPerms("user:assign_roles")
 );
+const canAssignDepartment = computed(() => hasPerms("user:assign_department"));
+const departmentSelectOptions = computed(() => {
+  const options = props.departmentOptions;
+  const current = props.editRow?.department;
+  if (!current || containsDepartment(options, current.id)) return options;
+
+  return [
+    {
+      id: current.id,
+      parentId: null,
+      name: `${current.name}（当前不可分配）`,
+      code: current.code,
+      children: [],
+      disabled: true
+    },
+    ...options
+  ];
+});
+
+function containsDepartment(
+  nodes: import("@/api/department").DepartmentOption[],
+  id: number
+): boolean {
+  return nodes.some(
+    node => node.id === id || containsDepartment(node.children || [], id)
+  );
+}
 
 function clearFieldError(field: UserFormField) {
   fieldErrors[field] = "";
@@ -146,6 +187,7 @@ function resetForm() {
   formData.password = "";
   formData.status = 1;
   formData.roles = [];
+  formData.departmentId = null;
   editingId.value = null;
   initialFormData.value = {
     username: "",
@@ -153,7 +195,8 @@ function resetForm() {
     phone: "",
     gender: 0,
     status: 1,
-    roles: []
+    roles: [],
+    departmentId: null
   };
 }
 
@@ -168,13 +211,15 @@ function initForm() {
     formData.gender = props.editRow.gender;
     formData.status = props.editRow.status;
     formData.roles = [...(props.editRow.roles || [])];
+    formData.departmentId = props.editRow.department?.id ?? null;
     initialFormData.value = {
       username: props.editRow.username,
       email: props.editRow.email,
       phone: props.editRow.phone || "",
       gender: props.editRow.gender,
       status: props.editRow.status,
-      roles: [...(props.editRow.roles || [])]
+      roles: [...(props.editRow.roles || [])],
+      departmentId: props.editRow.department?.id ?? null
     };
   }
 }
@@ -261,6 +306,12 @@ function changedSections(): UserEditSection[] {
   if (canAssignRoles.value && !sameRoles(formData.roles, initial.roles)) {
     changed.push("roles");
   }
+  if (
+    canAssignDepartment.value &&
+    formData.departmentId !== initial.departmentId
+  ) {
+    changed.push("department");
+  }
 
   return changed;
 }
@@ -270,7 +321,8 @@ function sectionNames(sections: UserEditSection[]): string {
     profile: "基本资料",
     password: "密码",
     status: "状态",
-    roles: "角色"
+    roles: "角色",
+    department: "部门"
   };
   return sections.map(section => names[section]).join("、");
 }
@@ -298,7 +350,10 @@ async function handleSubmit() {
         email: formData.email.trim(),
         phone: formData.phone.trim(),
         gender: formData.gender,
-        password: formData.password
+        password: formData.password,
+        ...(canAssignDepartment.value
+          ? { departmentId: formData.departmentId }
+          : {})
       });
       latestUser = response.data;
       message("用户创建成功", { type: "success" });
@@ -340,6 +395,13 @@ async function handleSubmit() {
         });
         latestUser = response.data;
         completed.push("roles");
+      }
+      if (changed.includes("department")) {
+        const response = await assignUserDepartment(editingId.value, {
+          departmentId: formData.departmentId
+        });
+        latestUser = response.data;
+        completed.push("department");
       }
 
       message("用户修改成功", { type: "success" });
@@ -437,7 +499,35 @@ async function handleSubmit() {
         />
       </el-form-item>
 
-      <el-divider v-if="mode === 'edit' && (canEditStatus || canAssignRoles)" />
+      <el-divider
+        v-if="
+          mode === 'edit' &&
+          (canEditStatus || canAssignRoles || canAssignDepartment)
+        "
+      />
+
+      <el-form-item
+        v-if="canAssignDepartment"
+        label="所属部门"
+        :error="fieldErrors.departmentId"
+      >
+        <el-tree-select
+          v-model="formData.departmentId"
+          :data="departmentSelectOptions"
+          :props="{
+            value: 'id',
+            label: 'name',
+            children: 'children',
+            disabled: 'disabled'
+          }"
+          placeholder="未分配部门"
+          clearable
+          check-strictly
+          default-expand-all
+          style="width: 100%"
+          @change="clearFieldError('departmentId')"
+        />
+      </el-form-item>
 
       <el-form-item
         v-if="canEditStatus"

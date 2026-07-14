@@ -1,5 +1,6 @@
 import { http } from "@/utils/http";
 import type { RoleRecord } from "@/api/role";
+import type { DepartmentOption } from "@/api/department";
 
 /** 登录请求参数 */
 export type LoginParams = {
@@ -124,6 +125,8 @@ export type UserRecord = {
   status: StatusCode;
   /** 角色代码列表 */
   roles: string[];
+  /** 所属部门 */
+  department: Pick<DepartmentOption, "id" | "code" | "name"> | null;
   /** 最后登录时间 */
   lastLoginAt: string | null;
   /** 创建时间 */
@@ -148,6 +151,8 @@ export type UserFormData = {
   status?: StatusCode;
   /** 角色代码列表 */
   roles?: string[];
+  /** 所属部门 ID */
+  departmentId?: number | null;
 };
 
 /** 用户资料表单数据（不含密码和角色） */
@@ -172,6 +177,10 @@ export type AssignRolesData = {
   roles: string[];
 };
 
+export type AssignDepartmentData = {
+  departmentId: number | null;
+};
+
 /** 用户列表查询参数 */
 export type UserListParams = {
   page?: number;
@@ -182,6 +191,8 @@ export type UserListParams = {
   status?: StatusCode | "";
   /** 角色过滤 */
   role?: string;
+  /** 部门 ID；unassigned 表示未分配部门 */
+  departmentId?: number | "unassigned";
 };
 
 /** 单个用户响应 */
@@ -203,6 +214,10 @@ type AssignableRolesResult = {
   data: RoleRecord[];
 };
 
+type DepartmentOptionsResult = {
+  data: DepartmentOption[];
+};
+
 /** 获取用户列表（分页） */
 export const getUserList = (params?: UserListParams) => {
   return http.request<UserPageResult>("get", "/api/v1/users", { params });
@@ -215,6 +230,20 @@ export const getAssignableRoles = () => {
     "/api/v1/users/assignable-roles"
   );
 };
+
+/** 用户列表的完整部门筛选树 */
+export const getDepartmentOptions = () =>
+  http.request<DepartmentOptionsResult>(
+    "get",
+    "/api/v1/users/department-options"
+  );
+
+/** 当前操作人可分配的有效部门树 */
+export const getAssignableDepartments = () =>
+  http.request<DepartmentOptionsResult>(
+    "get",
+    "/api/v1/users/assignable-departments"
+  );
 
 /** 新增用户 */
 export const createUser = (data: UserFormData) => {
@@ -239,6 +268,12 @@ export const assignUserRoles = (id: number, data: AssignRolesData) => {
     data
   });
 };
+
+/** 调整用户所属部门 */
+export const assignUserDepartment = (id: number, data: AssignDepartmentData) =>
+  http.request<UserResult>("patch", `/api/v1/users/${id}/department`, {
+    data
+  });
 
 /** 删除用户（硬删除） */
 export const deleteUser = (id: number) => {
