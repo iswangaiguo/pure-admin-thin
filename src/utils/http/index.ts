@@ -17,6 +17,8 @@ import { useUserStoreHook } from "@/store/modules/user";
 const defaultConfig: AxiosRequestConfig = {
   // 请求超时时间
   timeout: 10000,
+  // Refresh token 由同源 HttpOnly Cookie 自动携带。
+  withCredentials: true,
   headers: {
     Accept: "application/json, text/plain, */*",
     "Content-Type": "application/json",
@@ -86,11 +88,22 @@ class PureHttp {
     PureHttp.requests = [];
   }
 
-  private static refreshAccessToken(refreshToken: string) {
+  private static performRefresh() {
+    const refresh = () => useUserStoreHook().handRefreshToken();
+
+    // 同一浏览器的多个标签页共用 refresh cookie。Web Locks 将轮换串行化，
+    // 避免两个标签页同时使用同一个一次性 refresh token。
+    if (navigator.locks) {
+      return navigator.locks.request("elixadmin-refresh-token", refresh);
+    }
+
+    return refresh();
+  }
+
+  private static refreshAccessToken() {
     if (!PureHttp.isRefreshing) {
       PureHttp.isRefreshing = true;
-      useUserStoreHook()
-        .handRefreshToken({ refreshToken })
+      PureHttp.performRefresh()
         .then(res => {
           const token = res.data.accessToken;
           PureHttp.resolvePendingRequests(token);
@@ -108,18 +121,20 @@ class PureHttp {
   private static withFreshToken(config: PureHttpRequestConfig) {
     return new Promise<PureHttpRequestConfig>((resolve, reject) => {
       const data = getToken();
-      if (data) {
-        const now = new Date().getTime();
-        const expired = parseInt(data.expires) - now <= 0;
+      if (data?.accessToken) {
+        const expired = Number(data.expires) <= Date.now();
         if (expired) {
-          PureHttp.refreshAccessToken(data.refreshToken);
+          PureHttp.refreshAccessToken();
           PureHttp.retryOriginalRequest(config).then(resolve).catch(reject);
         } else {
           PureHttp.setAuthorization(config, data.accessToken);
           resolve(config);
         }
       } else {
-        resolve(config);
+        // 页面刷新后 access token 已从内存消失，此时用 HttpOnly Cookie
+        // 静默获取一个新的短期 access token。
+        PureHttp.refreshAccessToken();
+        PureHttp.retryOriginalRequest(config).then(resolve).catch(reject);
       }
     });
   }

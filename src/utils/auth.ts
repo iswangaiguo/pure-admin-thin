@@ -1,14 +1,11 @@
-import Cookies from "js-cookie";
 import { useUserStoreHook } from "@/store/modules/user";
 import { storageLocal, isString, isIncludeAllChildren } from "@pureadmin/utils";
 
 export interface DataInfo<T> {
-  /** token */
+  /** Access token。Refresh token 仅存在于服务端设置的 HttpOnly Cookie 中。 */
   accessToken: string;
   /** `accessToken`的过期时间（时间戳） */
   expires: T;
-  /** 用于调用刷新accessToken的接口时所需的token */
-  refreshToken: string;
   /** 头像 */
   avatar?: string;
   /** 用户名 */
@@ -21,109 +18,87 @@ export interface DataInfo<T> {
   permissions?: Array<string>;
 }
 
-export const userKey = "user-info";
-export const TokenKey = "authorized-token";
-/**
- * 通过`multiple-tabs`是否在`cookie`中，判断用户是否已经登录系统，
- * 从而支持多标签页打开已经登录的系统后无需再登录。
- * 浏览器完全关闭后`multiple-tabs`将自动从`cookie`中销毁，
- * 再次打开浏览器需要重新登录系统
- * */
-export const multipleTabsKey = "multiple-tabs";
+export interface StoredUserInfo {
+  avatar?: string;
+  username?: string;
+  nickname?: string;
+  roles?: Array<string>;
+  permissions?: Array<string>;
+}
 
-/** 获取`token` */
-export function getToken(): DataInfo<number> {
-  // 此处与`TokenKey`相同，此写法解决初始化时`Cookies`中不存在`TokenKey`报错
-  return Cookies.get(TokenKey)
-    ? JSON.parse(Cookies.get(TokenKey))
-    : storageLocal().getItem(userKey);
+type AccessTokenInfo = Pick<DataInfo<number>, "accessToken" | "expires">;
+
+export const userKey = "user-info";
+const legacyTokenKey = "authorized-token";
+const legacyMultipleTabsKey = "multiple-tabs";
+
+/** Access token 只在当前页面的 JavaScript 内存中保存。 */
+let currentToken: AccessTokenInfo | null = null;
+
+function removeLegacyCookies() {
+  document.cookie = `${legacyTokenKey}=; Max-Age=0; path=/; SameSite=Lax`;
+  document.cookie = `${legacyMultipleTabsKey}=; Max-Age=0; path=/; SameSite=Lax`;
 }
 
 /**
- * @description 设置`token`以及一些必要信息并采用无感刷新`token`方案
- * 无感刷新：后端返回`accessToken`（访问接口使用的`token`）、`refreshToken`（用于调用刷新`accessToken`的接口时所需的`token`，`refreshToken`的过期时间（比如30天）应大于`accessToken`的过期时间（比如2小时））、`expires`（`accessToken`的过期时间）
- * 将`accessToken`、`expires`、`refreshToken`这三条信息放在key值为authorized-token的cookie里（过期自动销毁）
- * 将`avatar`、`username`、`nickname`、`roles`、`permissions`、`refreshToken`、`expires`这七条信息放在key值为`user-info`的localStorage里（利用`multipleTabsKey`当浏览器完全关闭后自动销毁）
+ * 清除旧版本曾写入 localStorage 的 token。由于 JavaScript 无法创建
+ * HttpOnly Cookie，升级后的已有会话需要重新登录一次。
+ */
+function removeLegacyStoredTokens() {
+  const stored = storageLocal().getItem<
+    StoredUserInfo & Record<string, unknown>
+  >(userKey);
+  if (!stored) return;
+
+  const sanitized = { ...stored };
+  delete sanitized.accessToken;
+  delete sanitized.refreshToken;
+  delete sanitized.expires;
+  storageLocal().setItem(userKey, sanitized);
+}
+
+removeLegacyCookies();
+removeLegacyStoredTokens();
+
+/** 获取当前页面内存中的 access token。 */
+export function getToken(): AccessTokenInfo | null {
+  return currentToken;
+}
+
+/**
+ * 保存新的 access token，并缓存非敏感的用户展示及权限信息。
+ * Refresh token 由浏览器通过 HttpOnly Cookie 自动管理，前端不可读取。
  */
 export function setToken(data: DataInfo<number>) {
-  let expires = 0;
-  const { accessToken, refreshToken } = data;
-  const { isRemembered, loginDay } = useUserStoreHook();
-  // 后端直接返回 Unix 毫秒时间戳
-  expires = data.expires;
-  const cookieString = JSON.stringify({ accessToken, expires, refreshToken });
+  currentToken = {
+    accessToken: data.accessToken,
+    expires: data.expires
+  };
 
-  expires > 0
-    ? Cookies.set(TokenKey, cookieString, {
-        expires: (expires - Date.now()) / 86400000
-      })
-    : Cookies.set(TokenKey, cookieString);
+  const stored = storageLocal().getItem<StoredUserInfo>(userKey);
+  const userInfo: StoredUserInfo = {
+    avatar: data.avatar ?? stored?.avatar ?? "",
+    username: data.username ?? stored?.username ?? "",
+    nickname: data.nickname ?? stored?.nickname ?? "",
+    roles: data.roles ?? stored?.roles ?? [],
+    permissions: data.permissions ?? stored?.permissions ?? []
+  };
 
-  Cookies.set(
-    multipleTabsKey,
-    "true",
-    isRemembered
-      ? {
-          expires: loginDay
-        }
-      : {}
-  );
+  useUserStoreHook().SET_AVATAR(userInfo.avatar ?? "");
+  useUserStoreHook().SET_USERNAME(userInfo.username ?? "");
+  useUserStoreHook().SET_NICKNAME(userInfo.nickname ?? "");
+  useUserStoreHook().SET_ROLES(userInfo.roles ?? []);
+  useUserStoreHook().SET_PERMS(userInfo.permissions ?? []);
 
-  function setUserKey({ avatar, username, nickname, roles, permissions }) {
-    useUserStoreHook().SET_AVATAR(avatar);
-    useUserStoreHook().SET_USERNAME(username);
-    useUserStoreHook().SET_NICKNAME(nickname);
-    useUserStoreHook().SET_ROLES(roles);
-    useUserStoreHook().SET_PERMS(permissions);
-    storageLocal().setItem(userKey, {
-      refreshToken,
-      expires,
-      avatar,
-      username,
-      nickname,
-      roles,
-      permissions
-    });
-  }
-
-  if (data.username && data.roles) {
-    // Login and refresh responses carry the current authorization snapshot.
-    // Cached async routes contain button auths, so they must not survive a
-    // role or permission refresh.
-    storageLocal().removeItem("async-routes");
-    const { username, roles } = data;
-    setUserKey({
-      avatar: data?.avatar ?? "",
-      username,
-      nickname: data?.nickname ?? "",
-      roles,
-      permissions: data?.permissions ?? []
-    });
-  } else {
-    const avatar =
-      storageLocal().getItem<DataInfo<number>>(userKey)?.avatar ?? "";
-    const username =
-      storageLocal().getItem<DataInfo<number>>(userKey)?.username ?? "";
-    const nickname =
-      storageLocal().getItem<DataInfo<number>>(userKey)?.nickname ?? "";
-    const roles =
-      storageLocal().getItem<DataInfo<number>>(userKey)?.roles ?? [];
-    const permissions =
-      storageLocal().getItem<DataInfo<number>>(userKey)?.permissions ?? [];
-    setUserKey({
-      avatar,
-      username,
-      nickname,
-      roles,
-      permissions
-    });
-  }
+  // 权限刷新后不能继续使用旧的异步路由缓存。
+  storageLocal().removeItem("async-routes");
+  storageLocal().setItem(userKey, userInfo);
 }
 
-/** 删除`token`以及key值为`user-info`的localStorage信息 */
+/** 删除内存 token 和本地非敏感用户信息。 */
 export function removeToken() {
-  Cookies.remove(TokenKey);
-  Cookies.remove(multipleTabsKey);
+  currentToken = null;
+  removeLegacyCookies();
   storageLocal().removeItem(userKey);
   storageLocal().removeItem("async-routes");
 }

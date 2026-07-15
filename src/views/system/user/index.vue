@@ -4,7 +4,7 @@ import { PureTableBar } from "@/components/RePureTableBar";
 import { initRouter } from "@/router/utils";
 import { resetRouter, router } from "@/router";
 import { useUserStoreHook } from "@/store/modules/user";
-import { getToken, hasPerms } from "@/utils/auth";
+import { hasPerms } from "@/utils/auth";
 import { message } from "@/utils/message";
 import { storageLocal } from "@pureadmin/utils";
 import {
@@ -169,10 +169,7 @@ function canEditUser(): boolean {
 }
 
 async function refreshCurrentAccess(refreshRoutes: boolean) {
-  const token = getToken();
-  if (!token?.refreshToken) return;
-
-  await useUserStoreHook().handRefreshToken(token);
+  await useUserStoreHook().handRefreshToken();
   if (!refreshRoutes) return;
 
   storageLocal().removeItem("async-routes");

@@ -4,7 +4,6 @@ import { PureTableBar } from "@/components/RePureTableBar";
 import { hasAuth, initRouter } from "@/router/utils";
 import { resetRouter, router } from "@/router";
 import { useUserStoreHook } from "@/store/modules/user";
-import { getToken } from "@/utils/auth";
 import { message } from "@/utils/message";
 import { storageLocal } from "@pureadmin/utils";
 import {
@@ -137,10 +136,7 @@ function openPermissionDialog(row: MenuRecord) {
 }
 
 async function refreshCurrentAccess() {
-  const token = getToken();
-  if (!token?.refreshToken) return;
-
-  await useUserStoreHook().handRefreshToken(token);
+  await useUserStoreHook().handRefreshToken();
   storageLocal().removeItem("async-routes");
 
   const currentFullPath = router.currentRoute.value.fullPath;

@@ -21,8 +21,6 @@ export type LoginSuccessResult = {
   data: {
     /** 访问令牌 */
     accessToken: string;
-    /** 刷新令牌 */
-    refreshToken: string;
     /** 访问令牌过期时间（Unix 毫秒时间戳） */
     expires: number;
     /** 用户名 */
@@ -75,7 +73,6 @@ export const getCaptcha = () => {
 export type RefreshTokenResult = {
   data: {
     accessToken: string;
-    refreshToken: string;
     expires: number;
     username: string;
     roles: Array<string>;
@@ -91,10 +88,8 @@ export const getLogin = (data: LoginParams) => {
 };
 
 /** 刷新`token` */
-export const refreshTokenApi = (data?: object) => {
-  return http.request<RefreshTokenResult>("post", "/api/v1/auth/refresh", {
-    data
-  });
+export const refreshTokenApi = () => {
+  return http.request<RefreshTokenResult>("post", "/api/v1/auth/refresh");
 };
 
 /** 撤销当前登录会话 */

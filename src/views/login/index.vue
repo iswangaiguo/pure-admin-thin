@@ -48,6 +48,7 @@ const { title } = useNav();
 const ruleForm = reactive({
   username: "admin",
   password: import.meta.env.DEV ? "admin12345" : "",
+  rememberMe: false,
   captchaCode: "",
   captchaUuid: ""
 });
@@ -99,6 +100,7 @@ const onLogin = async (formEl: FormInstance | undefined) => {
         .loginByUsername({
           username: ruleForm.username,
           password: ruleForm.password,
+          rememberMe: ruleForm.rememberMe,
           captchaUuid: ruleForm.captchaUuid,
           captchaCode: ruleForm.captchaCode
         })
@@ -233,6 +235,12 @@ useEventListener(document, "keydown", ({ code }) => {
             </Motion>
 
             <Motion :delay="250">
+              <el-checkbox v-model="ruleForm.rememberMe">
+                记住登录状态（14 天）
+              </el-checkbox>
+            </Motion>
+
+            <Motion :delay="300">
               <el-button
                 class="w-full mt-4!"
                 size="default"
