@@ -45,7 +45,7 @@ push main → 构建前端镜像（pnpm build → nginx 静态站）→ 推送 G
 - 编排文件 `docker-compose.yml` 维护在后端仓库 `iswangaiguo/elixadmin`
 - 前端镜像推送到 `ghcr.io/iswangaiguo/pure-admin-thin:latest`
 - 服务器上 `docker compose pull frontend && docker compose up -d frontend` 完成更新
-- 对外由 Caddy 反向代理统一路由：`/api/*` → 后端，`/*` → 前端
+- 对外由服务器的独立反向代理统一路由：`/api/*` → 后端，`/*` → 前端
 
 ### GitHub Secrets
 

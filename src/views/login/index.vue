@@ -235,12 +235,6 @@ useEventListener(document, "keydown", ({ code }) => {
             </Motion>
 
             <Motion :delay="250">
-              <el-checkbox v-model="ruleForm.rememberMe">
-                记住登录状态（14 天）
-              </el-checkbox>
-            </Motion>
-
-            <Motion :delay="300">
               <el-button
                 class="w-full mt-4!"
                 size="default"
@@ -251,6 +245,12 @@ useEventListener(document, "keydown", ({ code }) => {
               >
                 登录
               </el-button>
+            </Motion>
+
+            <Motion class="remember-login" :delay="300">
+              <el-checkbox v-model="ruleForm.rememberMe">
+                记住登录状态
+              </el-checkbox>
             </Motion>
           </el-form>
         </div>
@@ -266,5 +266,11 @@ useEventListener(document, "keydown", ({ code }) => {
 <style lang="scss" scoped>
 :deep(.el-input-group__append, .el-input-group__prepend) {
   padding: 0;
+}
+
+.remember-login {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -4px;
 }
 </style>

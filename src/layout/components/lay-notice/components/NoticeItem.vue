@@ -1,177 +1,108 @@
 <script setup lang="ts">
-import { ListItem } from "../data";
-import { ref, PropType, nextTick } from "vue";
-import { useNav } from "@/layout/hooks/useNav";
-import { deviceDetection } from "@pureadmin/utils";
+import { formatDateTime } from "@/utils/date";
+import type { MyNoticeRecord } from "@/api/notice";
 
-defineProps({
-  noticeItem: {
-    type: Object as PropType<ListItem>,
-    default: () => {}
-  }
-});
+const props = defineProps<{
+  noticeItem: MyNoticeRecord;
+}>();
 
-const titleRef = ref(null);
-const titleTooltip = ref(false);
-const descriptionRef = ref(null);
-const descriptionTooltip = ref(false);
-const { tooltipEffect } = useNav();
-const isMobile = deviceDetection();
+const emit = defineEmits<{
+  (event: "select", item: MyNoticeRecord): void;
+}>();
 
-function hoverTitle() {
-  nextTick(() => {
-    titleRef.value?.scrollWidth > titleRef.value?.clientWidth
-      ? (titleTooltip.value = true)
-      : (titleTooltip.value = false);
-  });
-}
-
-function hoverDescription(event, description) {
-  // currentWidth 为文本在页面中所占的宽度，创建标签，加入到页面，获取currentWidth ,最后在移除
-  const tempTag = document.createElement("span");
-  tempTag.innerText = description;
-  tempTag.className = "getDescriptionWidth";
-  document.querySelector("body").appendChild(tempTag);
-  const currentWidth = (
-    document.querySelector(".getDescriptionWidth") as HTMLSpanElement
-  ).offsetWidth;
-  document.querySelector(".getDescriptionWidth").remove();
-
-  // cellWidth为容器的宽度
-  const cellWidth = event.target.offsetWidth;
-
-  // 当文本宽度大于容器宽度两倍时，代表文本显示超过两行
-  currentWidth > 2 * cellWidth
-    ? (descriptionTooltip.value = true)
-    : (descriptionTooltip.value = false);
+function selectItem() {
+  emit("select", props.noticeItem);
 }
 </script>
 
 <template>
   <div
-    class="notice-container border-0 border-b-[1px] border-solid border-[#f0f0f0] dark:border-[#303030]"
+    class="notice-item"
+    :class="{ 'is-unread': !noticeItem.read }"
+    role="button"
+    tabindex="0"
+    @click="selectItem"
+    @keyup.enter="selectItem"
   >
-    <el-avatar
-      v-if="noticeItem.avatar"
-      :size="30"
-      :src="noticeItem.avatar"
-      class="notice-container-avatar"
-    />
-    <div class="notice-container-text">
-      <div class="notice-text-title text-[#000000d9] dark:text-white">
+    <span v-if="!noticeItem.read" class="unread-dot" />
+    <div class="notice-main">
+      <div class="notice-title-row">
         <el-tooltip
-          popper-class="notice-title-popper"
-          :effect="tooltipEffect"
-          :disabled="!titleTooltip"
           :content="noticeItem.title"
           placement="top-start"
-          :enterable="!isMobile"
+          :show-after="500"
         >
-          <div
-            ref="titleRef"
-            class="notice-title-content"
-            @mouseover="hoverTitle"
-          >
-            {{ noticeItem.title }}
-          </div>
+          <span class="notice-title">{{ noticeItem.title }}</span>
         </el-tooltip>
-        <el-tag
-          v-if="noticeItem?.extra"
-          :type="noticeItem?.status"
-          size="small"
-          class="notice-title-extra"
-        >
-          {{ noticeItem?.extra }}
+        <el-tag v-if="noticeItem.pinned" type="danger" size="small">
+          置顶
         </el-tag>
       </div>
-
-      <el-tooltip
-        popper-class="notice-title-popper"
-        :effect="tooltipEffect"
-        :disabled="!descriptionTooltip"
-        :content="noticeItem.description"
-        placement="top-start"
-      >
-        <div
-          ref="descriptionRef"
-          class="notice-text-description"
-          @mouseover="hoverDescription($event, noticeItem.description)"
-        >
-          {{ noticeItem.description }}
-        </div>
-      </el-tooltip>
-      <div class="notice-text-datetime text-[#00000073] dark:text-white">
-        {{ noticeItem.datetime }}
+      <div class="notice-meta">
+        <span>{{ noticeItem.publishedBy?.username || "系统" }}</span>
+        <span>{{ formatDateTime(noticeItem.publishedAt) }}</span>
       </div>
     </div>
   </div>
 </template>
 
-<style>
-.notice-title-popper {
-  max-width: 238px;
-}
-</style>
 <style lang="scss" scoped>
-.notice-container {
+.notice-item {
+  position: relative;
   display: flex;
+  gap: 10px;
   align-items: flex-start;
+  padding: 13px 4px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  transition: background-color 0.2s;
+
+  &:hover,
+  &:focus-visible {
+    outline: none;
+    background: var(--el-fill-color-light);
+  }
+}
+
+.unread-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  margin-top: 7px;
+  background: var(--el-color-danger);
+  border-radius: 50%;
+}
+
+.notice-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.notice-title-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.notice-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--el-text-color-primary);
+  white-space: nowrap;
+}
+
+.is-unread .notice-title {
+  font-weight: 600;
+}
+
+.notice-meta {
+  display: flex;
   justify-content: space-between;
-  padding: 12px 0;
-
-  // border-bottom: 1px solid #f0f0f0;
-
-  .notice-container-avatar {
-    margin-right: 16px;
-    background: #fff;
-  }
-
-  .notice-container-text {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    justify-content: space-between;
-
-    .notice-text-title {
-      display: flex;
-      margin-bottom: 8px;
-      font-size: 14px;
-      font-weight: 400;
-      line-height: 1.5715;
-      cursor: pointer;
-
-      .notice-title-content {
-        flex: 1;
-        width: 200px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      .notice-title-extra {
-        float: right;
-        margin-top: -1.5px;
-        font-weight: 400;
-      }
-    }
-
-    .notice-text-description,
-    .notice-text-datetime {
-      font-size: 12px;
-      line-height: 1.5715;
-    }
-
-    .notice-text-description {
-      display: -webkit-box;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-    }
-
-    .notice-text-datetime {
-      margin-top: 4px;
-    }
-  }
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 </style>

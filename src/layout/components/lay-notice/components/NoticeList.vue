@@ -1,23 +1,31 @@
 <script setup lang="ts">
-import { PropType } from "vue";
-import { ListItem } from "../data";
+import type { MyNoticeRecord } from "@/api/notice";
 import NoticeItem from "./NoticeItem.vue";
 
-defineProps({
-  list: {
-    type: Array as PropType<Array<ListItem>>,
-    default: () => []
-  },
-  emptyText: {
-    type: String,
-    default: ""
+withDefaults(
+  defineProps<{
+    list?: MyNoticeRecord[];
+    emptyText?: string;
+  }>(),
+  {
+    list: () => [],
+    emptyText: "暂无通知公告"
   }
-});
+);
+
+const emit = defineEmits<{
+  (event: "select", item: MyNoticeRecord): void;
+}>();
 </script>
 
 <template>
   <div v-if="list.length">
-    <NoticeItem v-for="(item, index) in list" :key="index" :noticeItem="item" />
+    <NoticeItem
+      v-for="item in list"
+      :key="item.id"
+      :notice-item="item"
+      @select="emit('select', item)"
+    />
   </div>
-  <el-empty v-else :description="emptyText" />
+  <el-empty v-else :description="emptyText" :image-size="64" />
 </template>
