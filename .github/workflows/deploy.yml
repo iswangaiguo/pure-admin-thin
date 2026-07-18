@@ -20,9 +20,34 @@ env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/pure-admin-thin
 
 jobs:
+  quality:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run typecheck
+        run: pnpm typecheck
+
   build-push:
     name: Build and push image
     runs-on: ubuntu-latest
+    needs: quality
     permissions:
       contents: read
       packages: write
@@ -67,8 +92,23 @@ jobs:
             set -euo pipefail
             cd /opt/elixadmin
 
+            PREVIOUS_FRONTEND_IMAGE="$(docker inspect elixadmin-frontend --format '{{.Config.Image}}' 2>/dev/null || true)"
             export FRONTEND_TAG="sha-${{ github.sha }}"
-            docker compose up -d --no-deps frontend
+
+            if ! docker compose up -d --no-deps --wait --wait-timeout 60 frontend || \
+               ! docker compose exec -T frontend wget -q -O /dev/null http://127.0.0.1/; then
+              echo "ERROR: Frontend readiness check failed"
+
+              PREVIOUS_TAG="${PREVIOUS_FRONTEND_IMAGE##*:}"
+              if [[ "$PREVIOUS_TAG" =~ ^sha-[0-9a-f]{7,40}$ ]]; then
+                echo "Rolling back frontend to ${PREVIOUS_FRONTEND_IMAGE}"
+                FRONTEND_TAG="$PREVIOUS_TAG" docker compose up -d --no-deps --wait --wait-timeout 60 frontend
+              else
+                echo "ERROR: No previous immutable frontend image is available for automatic rollback"
+              fi
+
+              exit 1
+            fi
 
             BACKEND_IMAGE="$(docker inspect elixadmin-backend --format '{{.Config.Image}}')"
             FRONTEND_IMAGE="$(docker inspect elixadmin-frontend --format '{{.Config.Image}}')"
