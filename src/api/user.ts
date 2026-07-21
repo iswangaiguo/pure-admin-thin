@@ -167,6 +167,12 @@ export type ResetPasswordData = {
   password: string;
 };
 
+/** 当前用户修改密码参数 */
+export type ChangeOwnPasswordData = {
+  currentPassword: string;
+  newPassword: string;
+};
+
 /** 分配角色参数 */
 export type AssignRolesData = {
   roles: string[];
@@ -255,6 +261,11 @@ export const resetUserPassword = (id: number, data: ResetPasswordData) => {
   return http.request<UserResult>("patch", `/api/v1/users/${id}/password`, {
     data
   });
+};
+
+/** 当前用户校验原密码后修改自己的密码 */
+export const changeOwnPassword = (data: ChangeOwnPasswordData) => {
+  return http.request<void>("patch", "/api/v1/me/password", { data });
 };
 
 /** 分配用户角色 */

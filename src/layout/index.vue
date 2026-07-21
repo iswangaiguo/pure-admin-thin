@@ -27,6 +27,7 @@ import LayTag from "./components/lay-tag/index.vue";
 import LayNavbar from "./components/lay-navbar/index.vue";
 import LayContent from "./components/lay-content/index.vue";
 import LaySetting from "./components/lay-setting/index.vue";
+import LayPassword from "./components/lay-password/index.vue";
 import NavVertical from "./components/lay-sidebar/NavVertical.vue";
 import NavHorizontal from "./components/lay-sidebar/NavHorizontal.vue";
 import BackTopIcon from "@/assets/svg/back_top.svg?component";
@@ -198,6 +199,8 @@ const LayHeader = defineComponent({
     </div>
     <!-- 系统设置 -->
     <LaySetting />
+    <!-- 当前用户修改密码 -->
+    <LayPassword />
   </div>
 </template>
 

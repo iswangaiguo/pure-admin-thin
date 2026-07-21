@@ -84,6 +84,10 @@ export function useNav() {
     void useUserStoreHook().logOut();
   }
 
+  function openPasswordDialog() {
+    emitter.emit("openPasswordDialog");
+  }
+
   function backTopMenu() {
     router.push(getTopMenu()?.path);
   }
@@ -132,6 +136,7 @@ export function useNav() {
     device,
     layout,
     logout,
+    openPasswordDialog,
     routers,
     $storage,
     isFullscreen,

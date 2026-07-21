@@ -10,6 +10,7 @@ import { usePermissionStoreHook } from "@/store/modules/permission";
 import LaySidebarItem from "../lay-sidebar/components/SidebarItem.vue";
 import LaySidebarFullScreen from "../lay-sidebar/components/SidebarFullScreen.vue";
 
+import LockPasswordLine from "~icons/ri/lock-password-line";
 import LogoutCircleRLine from "~icons/ri/logout-circle-r-line";
 import Setting from "~icons/ri/settings-3-line";
 
@@ -24,6 +25,7 @@ const {
   route,
   title,
   logout,
+  openPasswordDialog,
   onPanel,
   getLogo,
   username,
@@ -77,7 +79,7 @@ onMounted(() => {
       <LaySidebarFullScreen id="full-screen" />
       <!-- 消息通知 -->
       <LayNotice id="header-notice" />
-      <!-- 退出登录 -->
+      <!-- 用户菜单 -->
       <el-dropdown trigger="click">
         <span class="el-dropdown-link navbar-bg-hover">
           <img :src="userAvatar" :style="avatarsStyle" />
@@ -85,6 +87,13 @@ onMounted(() => {
         </span>
         <template #dropdown>
           <el-dropdown-menu class="logout">
+            <el-dropdown-item @click="openPasswordDialog">
+              <IconifyIconOffline
+                :icon="LockPasswordLine"
+                style="margin: 5px"
+              />
+              修改密码
+            </el-dropdown-item>
             <el-dropdown-item @click="logout">
               <IconifyIconOffline
                 :icon="LogoutCircleRLine"
@@ -112,7 +121,7 @@ onMounted(() => {
 }
 
 .logout {
-  width: 120px;
+  width: 132px;
 
   ::v-deep(.el-dropdown-menu__item) {
     display: inline-flex;
