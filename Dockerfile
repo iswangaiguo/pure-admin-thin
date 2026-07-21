@@ -1,13 +1,13 @@
-FROM node:20-alpine AS build-stage
+FROM node:24-alpine AS build-stage
 
 WORKDIR /app
 RUN corepack enable
-RUN corepack prepare pnpm@9 --activate
+RUN corepack prepare pnpm@10 --activate
 
 RUN npm config set registry https://registry.npmmirror.com
 
 COPY .npmrc package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN HUSKY=0 pnpm install --frozen-lockfile
 
 COPY . .
 RUN pnpm build

@@ -11,7 +11,6 @@ const include = [
   "axios",
   "pinia",
   "vue-types",
-  "js-cookie",
   "vue-tippy",
   "pinyin-pro",
   "sortablejs",
