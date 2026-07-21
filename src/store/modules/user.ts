@@ -22,6 +22,8 @@ import {
   userKey
 } from "@/utils/auth";
 
+let logoutPromise: Promise<void> | null = null;
+
 export const useUserStore = defineStore("pure-user", {
   state: (): userType => ({
     // 头像
@@ -84,20 +86,32 @@ export const useUserStore = defineStore("pure-user", {
       });
     },
     /** 登出；refresh 失败时可传 false，仅清理本地状态，避免递归请求 */
-    async logOut(revokeRemoteSession = true) {
-      try {
-        if (revokeRemoteSession) await logoutApi();
-      } catch {
-        // 无论服务端会话是否已经失效，本地都必须完成退出。
-      } finally {
-        this.username = "";
-        this.roles = [];
-        this.permissions = [];
-        removeToken();
-        useMultiTagsStoreHook().handleTags("equal", [...routerArrays]);
-        resetRouter();
-        router.push("/login");
-      }
+    logOut(revokeRemoteSession = true) {
+      if (logoutPromise) return logoutPromise;
+
+      const operation = (async () => {
+        try {
+          if (revokeRemoteSession) await logoutApi();
+        } catch {
+          // 无论服务端会话是否已经失效，本地都必须完成退出。
+        } finally {
+          this.username = "";
+          this.roles = [];
+          this.permissions = [];
+          removeToken();
+          useMultiTagsStoreHook().handleTags("equal", [...routerArrays]);
+          resetRouter();
+
+          if (router.currentRoute.value.path !== "/login") {
+            await router.push("/login");
+          }
+        }
+      })();
+
+      logoutPromise = operation;
+      return operation.finally(() => {
+        if (logoutPromise === operation) logoutPromise = null;
+      });
     },
     /** 刷新`token` */
     async handRefreshToken() {

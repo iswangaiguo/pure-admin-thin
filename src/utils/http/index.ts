@@ -12,6 +12,7 @@ import type {
 import { stringify } from "qs";
 import { getToken, formatToken } from "@/utils/auth";
 import { useUserStoreHook } from "@/store/modules/user";
+import { message } from "@/utils/message";
 
 // 相关配置请参考：www.axios-js.com/zh-cn/docs/#axios-request-config-1
 const defaultConfig: AxiosRequestConfig = {
@@ -30,23 +31,17 @@ const defaultConfig: AxiosRequestConfig = {
   }
 };
 
-type PendingRequest = {
-  config: PureHttpRequestConfig;
-  resolve: (config: PureHttpRequestConfig) => void;
-  reject: (error: unknown) => void;
-};
-
 class PureHttp {
   constructor() {
     this.httpInterceptorsRequest();
     this.httpInterceptorsResponse();
   }
 
-  /** `token`过期后，暂存待执行的请求 */
-  private static requests: PendingRequest[] = [];
+  /** 同一页面内所有待恢复请求共用一次刷新。 */
+  private static refreshPromise: Promise<string> | null = null;
 
-  /** 防止重复刷新`token` */
-  private static isRefreshing = false;
+  /** 会话失效后的本地清理只执行一次，直到新的有效 token 被使用。 */
+  private static sessionInvalidationPromise: Promise<void> | null = null;
 
   /** 初始化配置对象 */
   private static initConfig: PureHttpRequestConfig = {};
@@ -54,15 +49,33 @@ class PureHttp {
   /** 保存当前`Axios`实例对象 */
   private static axiosInstance: AxiosInstance = Axios.create(defaultConfig);
 
-  /** 重连原始请求 */
-  private static retryOriginalRequest(config: PureHttpRequestConfig) {
-    return new Promise<PureHttpRequestConfig>((resolve, reject) => {
-      PureHttp.requests.push({
-        config,
-        resolve,
-        reject
-      });
-    });
+  /** 无需 access token 的接口。 */
+  private static publicAuthPaths = [
+    "/api/v1/auth/refresh",
+    "/api/v1/auth/login",
+    "/api/v1/auth/captcha"
+  ];
+
+  /** 401 不应触发 refresh 的认证接口，防止递归或覆盖登录错误。 */
+  private static authRecoveryExcludedPaths = [
+    ...PureHttp.publicAuthPaths,
+    "/api/v1/auth/logout"
+  ];
+
+  private static requestMatchesPath(
+    config: PureHttpRequestConfig,
+    paths: string[]
+  ) {
+    const requestUrl = config.url || "";
+    let pathname = requestUrl.split(/[?#]/, 1)[0];
+
+    try {
+      pathname = new URL(requestUrl, "http://localhost").pathname;
+    } catch {
+      // 非标准 URL 保留上面的无查询参数版本进行匹配。
+    }
+
+    return paths.some(path => pathname.endsWith(path));
   }
 
   private static setAuthorization(
@@ -73,70 +86,87 @@ class PureHttp {
     config.headers["Authorization"] = formatToken(token);
   }
 
-  private static resolvePendingRequests(token: string) {
-    PureHttp.requests.forEach(({ config, resolve }) => {
-      PureHttp.setAuthorization(config, token);
-      resolve(config);
-    });
-    PureHttp.requests = [];
-  }
-
-  private static rejectPendingRequests(error: unknown) {
-    PureHttp.requests.forEach(({ reject }) => {
-      reject(error);
-    });
-    PureHttp.requests = [];
-  }
-
   private static performRefresh() {
     const refresh = () => useUserStoreHook().handRefreshToken();
 
     // 同一浏览器的多个标签页共用 refresh cookie。Web Locks 将轮换串行化，
     // 避免两个标签页同时使用同一个一次性 refresh token。
-    if (navigator.locks) {
+    if (typeof navigator !== "undefined" && navigator.locks) {
       return navigator.locks.request("elixadmin-refresh-token", refresh);
     }
 
     return refresh();
   }
 
-  private static refreshAccessToken() {
-    if (!PureHttp.isRefreshing) {
-      PureHttp.isRefreshing = true;
-      PureHttp.performRefresh()
-        .then(res => {
-          const token = res.data.accessToken;
-          PureHttp.resolvePendingRequests(token);
-        })
-        .catch(error => {
-          PureHttp.rejectPendingRequests(error);
-          useUserStoreHook().logOut(false);
-        })
-        .finally(() => {
-          PureHttp.isRefreshing = false;
-        });
-    }
+  private static hasLocalSession() {
+    const userStore = useUserStoreHook();
+    return Boolean(getToken() || userStore.username);
   }
 
-  private static withFreshToken(config: PureHttpRequestConfig) {
-    return new Promise<PureHttpRequestConfig>((resolve, reject) => {
-      const data = getToken();
-      if (data?.accessToken) {
-        const expired = Number(data.expires) <= Date.now();
-        if (expired) {
-          PureHttp.refreshAccessToken();
-          PureHttp.retryOriginalRequest(config).then(resolve).catch(reject);
-        } else {
-          PureHttp.setAuthorization(config, data.accessToken);
-          resolve(config);
-        }
-      } else {
-        // 页面刷新后 access token 已从内存消失，此时用 HttpOnly Cookie
-        // 静默获取一个新的短期 access token。
-        PureHttp.refreshAccessToken();
-        PureHttp.retryOriginalRequest(config).then(resolve).catch(reject);
+  private static invalidateSession(notify: boolean) {
+    if (!PureHttp.sessionInvalidationPromise) {
+      if (notify) {
+        message("登录状态已失效，请重新登录", {
+          type: "warning",
+          grouping: true
+        });
       }
-    });
+
+      PureHttp.sessionInvalidationPromise = useUserStoreHook()
+        .logOut(false)
+        .catch(() => undefined);
+    }
+
+    return PureHttp.sessionInvalidationPromise;
+  }
+
+  private static refreshAccessToken(): Promise<string> {
+    if (!PureHttp.refreshPromise) {
+      const notifyOnFailure = PureHttp.hasLocalSession();
+      const trackedRefresh = PureHttp.performRefresh()
+        .then(res => {
+          const token = res?.data?.accessToken;
+          if (!token)
+            throw new Error("Refresh response did not include an access token");
+
+          PureHttp.sessionInvalidationPromise = null;
+          return token;
+        })
+        .catch(error => {
+          // 不等待路由跳转完成，避免主动 logout 的请求正在等待 refresh 时互相等待。
+          void PureHttp.invalidateSession(notifyOnFailure);
+          throw error;
+        })
+        .finally(() => {
+          if (PureHttp.refreshPromise === trackedRefresh) {
+            PureHttp.refreshPromise = null;
+          }
+        });
+
+      PureHttp.refreshPromise = trackedRefresh;
+    }
+
+    return PureHttp.refreshPromise;
+  }
+
+  private static async withFreshToken(config: PureHttpRequestConfig) {
+    if (PureHttp.refreshPromise) {
+      const token = await PureHttp.refreshPromise;
+      PureHttp.setAuthorization(config, token);
+      return config;
+    }
+
+    const data = getToken();
+    if (data?.accessToken && Number(data.expires) > Date.now()) {
+      PureHttp.sessionInvalidationPromise = null;
+      PureHttp.setAuthorization(config, data.accessToken);
+      return config;
+    }
+
+    // 页面刷新、access token 到期时，使用 HttpOnly Cookie 静默刷新。
+    const token = await PureHttp.refreshAccessToken();
+    PureHttp.setAuthorization(config, token);
+    return config;
   }
 
   /** 请求拦截 */
@@ -152,14 +182,7 @@ class PureHttp {
           PureHttp.initConfig.beforeRequestCallback(config);
           return config;
         }
-        /** 请求白名单，放置一些不需要`token`的接口（通过设置请求白名单，防止`token`过期后再请求造成的死循环问题） */
-        const whiteList = [
-          "/api/v1/auth/refresh",
-          "/api/v1/auth/login",
-          "/api/v1/auth/captcha"
-        ];
-        const requestUrl = config.url || "";
-        return whiteList.some(url => requestUrl.endsWith(url))
+        return PureHttp.requestMatchesPath(config, PureHttp.publicAuthPaths)
           ? config
           : PureHttp.withFreshToken(config);
       },
@@ -186,11 +209,38 @@ class PureHttp {
         }
         return response.data;
       },
-      (error: PureHttpError) => {
+      async (error: PureHttpError) => {
         const $error = error;
         $error.isCancelRequest = Axios.isCancel($error);
-        // 所有的响应异常 区分来源为取消请求/非取消请求
-        return Promise.reject($error);
+        const $config = $error.config as PureHttpRequestConfig | undefined;
+
+        if (
+          $error.isCancelRequest ||
+          $error.response?.status !== 401 ||
+          !$config ||
+          PureHttp.requestMatchesPath(
+            $config,
+            PureHttp.authRecoveryExcludedPaths
+          )
+        ) {
+          return Promise.reject($error);
+        }
+
+        // 每个请求最多重放一次，避免服务端持续返回 401 时形成死循环。
+        if ($config.authRetry) {
+          await PureHttp.invalidateSession(PureHttp.hasLocalSession());
+          return Promise.reject($error);
+        }
+
+        $config.authRetry = true;
+
+        try {
+          const token = await PureHttp.refreshAccessToken();
+          PureHttp.setAuthorization($config, token);
+          return instance.request($config);
+        } catch (refreshError) {
+          return Promise.reject(refreshError);
+        }
       }
     );
   }

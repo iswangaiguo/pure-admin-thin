@@ -34,6 +34,7 @@ const legacyMultipleTabsKey = "multiple-tabs";
 
 /** Access token 只在当前页面的 JavaScript 内存中保存。 */
 let currentToken: AccessTokenInfo | null = null;
+let removeAuthSyncListener: (() => void) | null = null;
 
 function removeLegacyCookies() {
   document.cookie = `${legacyTokenKey}=; Max-Age=0; path=/; SameSite=Lax`;
@@ -101,6 +102,35 @@ export function removeToken() {
   removeLegacyCookies();
   storageLocal().removeItem(userKey);
   storageLocal().removeItem("async-routes");
+}
+
+/**
+ * 同步其他标签页的本地退出。服务端在下一次请求时仍会校验会话状态；
+ * 这里仅让同一浏览器内的主动退出即时生效。
+ */
+export function setupAuthSync() {
+  if (typeof window === "undefined" || removeAuthSyncListener) {
+    return removeAuthSyncListener ?? (() => undefined);
+  }
+
+  const handleStorage = (event: StorageEvent) => {
+    if (
+      event.storageArea === window.localStorage &&
+      event.key === userKey &&
+      event.newValue === null &&
+      currentToken
+    ) {
+      void useUserStoreHook().logOut(false);
+    }
+  };
+
+  window.addEventListener("storage", handleStorage);
+  removeAuthSyncListener = () => {
+    window.removeEventListener("storage", handleStorage);
+    removeAuthSyncListener = null;
+  };
+
+  return removeAuthSyncListener;
 }
 
 /** 格式化token（jwt格式） */

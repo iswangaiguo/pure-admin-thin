@@ -25,6 +25,8 @@ export interface PureHttpResponse extends AxiosResponse {
 export interface PureHttpRequestConfig extends AxiosRequestConfig {
   beforeRequestCallback?: (request: PureHttpRequestConfig) => void;
   beforeResponseCallback?: (response: PureHttpResponse) => void;
+  /** 内部标记：收到 401 后，该请求是否已经重试过。 */
+  authRetry?: boolean;
 }
 
 export default class PureHttp {
