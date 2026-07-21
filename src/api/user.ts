@@ -41,8 +41,6 @@ export type LoginErrorResult = {
     message: string;
     /** 附加详情 */
     details?: {
-      /** 剩余尝试次数（密码错误时） */
-      remainingAttempts?: number;
       /** 等待时间（秒，锁定时） */
       retryAfter?: number;
     };

@@ -76,9 +76,6 @@ const showLoginError = (error: any) => {
     return;
   }
 
-  if (errData?.details?.remainingAttempts != null) {
-    errorMessage += `，剩余尝试次数：${errData.details.remainingAttempts}`;
-  }
   if (errData?.details?.retryAfter != null) {
     const mins = Math.ceil(errData.details.retryAfter / 60);
     errorMessage += `，请${mins}分钟后再试`;
