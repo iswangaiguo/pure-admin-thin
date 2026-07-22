@@ -23,6 +23,30 @@ import {
 } from "@/utils/auth";
 
 let logoutPromise: Promise<void> | null = null;
+let tokenRefreshPromise: Promise<RefreshTokenResult> | null = null;
+
+async function refreshToken() {
+  const res = await refreshTokenApi();
+
+  if (!res?.data?.accessToken) {
+    throw new Error("Refresh response did not include an access token");
+  }
+
+  setToken(res.data);
+  return res;
+}
+
+function refreshTokenWithCrossTabLock() {
+  // 所有标签页共享同一个一次性 refresh cookie。串行轮换可避免合法并发
+  // 被服务端误判为旧 token 重用，并撤销整个 session。
+  if (typeof navigator !== "undefined" && navigator.locks) {
+    return navigator.locks
+      .request("elixadmin-refresh-token", refreshToken)
+      .then(result => result);
+  }
+
+  return refreshToken();
+}
 
 export const useUserStore = defineStore("pure-user", {
   state: (): userType => ({
@@ -114,19 +138,19 @@ export const useUserStore = defineStore("pure-user", {
       });
     },
     /** 刷新`token` */
-    async handRefreshToken() {
-      return new Promise<RefreshTokenResult>((resolve, reject) => {
-        refreshTokenApi()
-          .then(res => {
-            if (res?.data) {
-              setToken(res.data);
-              resolve(res);
-            }
-          })
-          .catch(error => {
-            reject(error);
-          });
-      });
+    handRefreshToken(): Promise<RefreshTokenResult> {
+      if (!tokenRefreshPromise) {
+        const operation = refreshTokenWithCrossTabLock();
+        const trackedRefresh = operation.finally(() => {
+          if (tokenRefreshPromise === trackedRefresh) {
+            tokenRefreshPromise = null;
+          }
+        });
+
+        tokenRefreshPromise = trackedRefresh;
+      }
+
+      return tokenRefreshPromise;
     }
   }
 });

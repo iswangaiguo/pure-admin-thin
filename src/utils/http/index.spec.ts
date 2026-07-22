@@ -183,6 +183,30 @@ describe("HTTP authentication recovery", () => {
     expect(mocks.message).toHaveBeenCalledTimes(1);
   });
 
+  it("clears the shared refresh after an empty response and allows a later retry", async () => {
+    mocks.token = {
+      accessToken: "expired-access-token",
+      expires: Date.now() - 1
+    };
+    mocks.username = "alice";
+    mocks.refresh.mockResolvedValueOnce({});
+    const http = await loadHttp();
+    const adapter: AxiosAdapter = config =>
+      resolveResponse(config, { authorization: authorization(config) });
+
+    await expect(
+      http.get("/api/v1/protected", undefined, { adapter })
+    ).rejects.toThrow("Refresh response did not include an access token");
+
+    refreshSuccessfully("recovered-access-token");
+
+    await expect(
+      http.get("/api/v1/protected", undefined, { adapter })
+    ).resolves.toEqual({ authorization: "Bearer recovered-access-token" });
+    expect(mocks.refresh).toHaveBeenCalledTimes(2);
+    expect(mocks.logout).toHaveBeenCalledTimes(1);
+  });
+
   it("does not retry forever when the replay also returns 401", async () => {
     useValidToken();
     refreshSuccessfully();

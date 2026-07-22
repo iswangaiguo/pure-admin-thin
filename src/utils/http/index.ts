@@ -86,18 +86,6 @@ class PureHttp {
     config.headers["Authorization"] = formatToken(token);
   }
 
-  private static performRefresh() {
-    const refresh = () => useUserStoreHook().handRefreshToken();
-
-    // 同一浏览器的多个标签页共用 refresh cookie。Web Locks 将轮换串行化，
-    // 避免两个标签页同时使用同一个一次性 refresh token。
-    if (typeof navigator !== "undefined" && navigator.locks) {
-      return navigator.locks.request("elixadmin-refresh-token", refresh);
-    }
-
-    return refresh();
-  }
-
   private static hasLocalSession() {
     const userStore = useUserStoreHook();
     return Boolean(getToken() || userStore.username);
@@ -123,7 +111,9 @@ class PureHttp {
   private static refreshAccessToken(): Promise<string> {
     if (!PureHttp.refreshPromise) {
       const notifyOnFailure = PureHttp.hasLocalSession();
-      const trackedRefresh = PureHttp.performRefresh()
+      // Store 是所有刷新入口共用的协调器，负责同页去重和跨标签页串行化。
+      const trackedRefresh = useUserStoreHook()
+        .handRefreshToken()
         .then(res => {
           const token = res?.data?.accessToken;
           if (!token)
