@@ -22,6 +22,7 @@ import { userKey, type StoredUserInfo } from "@/utils/auth";
 import { type menuType, routerArrays } from "@/layout/types";
 import { useMultiTagsStoreHook } from "@/store/modules/multiTags";
 import { usePermissionStoreHook } from "@/store/modules/permission";
+import { createSingleFlight, resolveRouteComponent } from "./routeHelpers";
 const IFrame = () => import("@/layout/frame.vue");
 // https://cn.vitejs.dev/guide/features.html#glob-import
 const modulesRoutes = import.meta.glob("/src/views/**/*.{vue,tsx}");
@@ -196,34 +197,34 @@ function handleAsyncRoutes(routeList) {
   addPathMatch();
 }
 
-/** 初始化路由（`new Promise` 写法防止在异步请求中造成无限循环）*/
-function initRouter() {
-  if (getConfig()?.CachingAsyncRoutes) {
-    // 开启动态路由缓存本地localStorage
-    const key = "async-routes";
-    const asyncRouteList = storageLocal().getItem(key) as any;
-    if (asyncRouteList && asyncRouteList?.length > 0) {
-      return new Promise(resolve => {
-        handleAsyncRoutes(asyncRouteList);
-        resolve(router);
-      });
-    } else {
-      return new Promise(resolve => {
-        getAsyncRoutes().then(({ data }) => {
-          handleAsyncRoutes(cloneDeep(data));
-          storageLocal().setItem(key, data);
-          resolve(router);
-        });
-      });
+const runRouterInitialization = createSingleFlight(async () => {
+  const cacheEnabled = getConfig()?.CachingAsyncRoutes;
+  const cacheKey = "async-routes";
+
+  if (cacheEnabled) {
+    const cachedRoutes = storageLocal().getItem(cacheKey);
+
+    if (Array.isArray(cachedRoutes) && cachedRoutes.length > 0) {
+      handleAsyncRoutes(cloneDeep(cachedRoutes));
+      return router;
     }
-  } else {
-    return new Promise(resolve => {
-      getAsyncRoutes().then(({ data }) => {
-        handleAsyncRoutes(cloneDeep(data));
-        resolve(router);
-      });
-    });
   }
+
+  const response = await getAsyncRoutes();
+  const routeList = response?.data;
+
+  if (!Array.isArray(routeList)) {
+    throw new Error("Async routes response must contain an array");
+  }
+
+  handleAsyncRoutes(cloneDeep(routeList));
+  if (cacheEnabled) storageLocal().setItem(cacheKey, routeList);
+  return router;
+});
+
+/** 初始化动态路由；并发调用共享同一次请求，失败后允许重试。 */
+function initRouter() {
+  return runRouterInitialization();
 }
 
 /**
@@ -308,7 +309,6 @@ function handleAliveRoute({ name }: ToRouteType, mode?: string) {
 /** 过滤后端传来的动态路由 重新生成规范路由 */
 function addAsyncRoutes(arrRoutes: Array<RouteRecordRaw>) {
   if (!arrRoutes || !arrRoutes.length) return;
-  const modulesRoutesKeys = Object.keys(modulesRoutes);
   arrRoutes.forEach((v: RouteRecordRaw) => {
     // 将backstage属性加入meta，标识此路由为后端返回路由
     v.meta.backstage = true;
@@ -321,15 +321,7 @@ function addAsyncRoutes(arrRoutes: Array<RouteRecordRaw>) {
     if (v.meta?.frameSrc) {
       v.component = IFrame;
     } else if (typeof v.component === "string") {
-      const componentPath = v.component;
-      // 仅当后端明确传了 component 时才解析，避免目录类型路由（M）因 path 误匹配到错误的组件
-      // 例如 /system 路径会匹配到 /src/views/system/menu/index.vue 中 "/system" 子串
-      const index = modulesRoutesKeys.findIndex(ev =>
-        ev.includes(componentPath)
-      );
-      if (index !== -1) {
-        v.component = modulesRoutes[modulesRoutesKeys[index]];
-      }
+      v.component = resolveRouteComponent(v.component, modulesRoutes);
     }
     if (v?.children && v.children.length) {
       addAsyncRoutes(v.children);
