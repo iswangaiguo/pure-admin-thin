@@ -14,11 +14,11 @@ import {
   getDepartmentOptions,
   deleteUser,
   type GenderCode,
-  type StatusCode,
   type UserRecord
 } from "@/api/user";
 import type { RoleRecord } from "@/api/role";
 import type { DepartmentOption } from "@/api/department";
+import { BINARY_STATUS, type StatusCode } from "@/api/status";
 import { formatDateTime } from "@/utils/date";
 import type { TableColumns } from "@pureadmin/table";
 import UserForm from "./form.vue";
@@ -417,10 +417,14 @@ onMounted(() => {
               >
                 <template #status="{ row }">
                   <el-tag
-                    :type="row.status === 1 ? 'success' : 'danger'"
+                    :type="
+                      row.status === BINARY_STATUS.ENABLED
+                        ? 'success'
+                        : 'danger'
+                    "
                     size="small"
                   >
-                    {{ row.status === 1 ? "正常" : "禁用" }}
+                    {{ row.status === BINARY_STATUS.ENABLED ? "正常" : "禁用" }}
                   </el-tag>
                 </template>
                 <template #gender="{ row }">

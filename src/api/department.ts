@@ -1,6 +1,5 @@
 import { http } from "@/utils/http";
-
-export type StatusCode = 0 | 1;
+import type { StatusCode } from "@/api/status";
 
 export type DepartmentLeader = {
   id: number;
@@ -58,7 +57,7 @@ export const createDepartment = (data: DepartmentFormData) =>
   http.request<DepartmentResult>("post", "/api/v1/departments", { data });
 
 export const updateDepartment = (id: number, data: DepartmentFormData) =>
-  http.request<DepartmentResult>("put", `/api/v1/departments/${id}`, {
+  http.request<DepartmentResult>("patch", `/api/v1/departments/${id}`, {
     data
   });
 

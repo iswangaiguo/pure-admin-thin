@@ -1,6 +1,5 @@
 import { http } from "@/utils/http";
-
-export type StatusCode = 0 | 1;
+import type { StatusCode } from "@/api/status";
 
 /** 菜单记录 */
 export type MenuRecord = {
@@ -97,7 +96,7 @@ export const createMenu = (data: MenuFormData) => {
 
 /** 更新菜单 */
 export const updateMenu = (id: number, data: MenuFormData) => {
-  return http.request<MenuResult>("put", `/api/v1/menus/${id}`, { data });
+  return http.request<MenuResult>("patch", `/api/v1/menus/${id}`, { data });
 };
 
 /** 删除菜单 */

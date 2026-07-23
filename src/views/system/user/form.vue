@@ -15,10 +15,10 @@ import {
   updateUser,
   updateUserStatus,
   type GenderCode,
-  type StatusCode,
   type UserRecord
 } from "@/api/user";
 import type { RoleRecord } from "@/api/role";
+import { BINARY_STATUS, type StatusCode } from "@/api/status";
 
 defineOptions({
   name: "UserForm"
@@ -80,7 +80,7 @@ const initialFormData = ref({
   email: "",
   phone: "",
   gender: 0 as GenderCode,
-  status: 1 as StatusCode,
+  status: BINARY_STATUS.ENABLED as StatusCode,
   roles: [] as string[],
   departmentId: null as number | null
 });
@@ -100,7 +100,7 @@ const formData = reactive<{
   phone: "",
   gender: 0,
   password: "",
-  status: 1,
+  status: BINARY_STATUS.ENABLED,
   roles: [],
   departmentId: null
 });
@@ -194,7 +194,7 @@ function resetForm() {
     email: "",
     phone: "",
     gender: 0,
-    status: 1,
+    status: BINARY_STATUS.ENABLED,
     roles: [],
     departmentId: null
   };

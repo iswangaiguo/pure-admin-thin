@@ -1,6 +1,5 @@
 import { http } from "@/utils/http";
-
-export type StatusCode = 0 | 1;
+import type { StatusCode } from "@/api/status";
 
 /** 角色记录 */
 export type RoleRecord = {
@@ -56,7 +55,7 @@ export const createRole = (data: RoleFormData) => {
 
 /** 更新角色 */
 export const updateRole = (id: number, data: RoleFormData) => {
-  return http.request<RoleResult>("put", `/api/v1/roles/${id}`, { data });
+  return http.request<RoleResult>("patch", `/api/v1/roles/${id}`, { data });
 };
 
 /** 删除角色 */

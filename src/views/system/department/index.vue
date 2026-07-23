@@ -9,9 +9,9 @@ import { formatDateTime } from "@/utils/date";
 import {
   deleteDepartment,
   getDepartments,
-  type DepartmentRecord,
-  type StatusCode
+  type DepartmentRecord
 } from "@/api/department";
+import { BINARY_STATUS, type StatusCode } from "@/api/status";
 import DepartmentForm from "./form.vue";
 
 defineOptions({ name: "DepartmentManagement" });
@@ -87,7 +87,7 @@ function isEffectivelyEnabled(
   ancestorsEnabled = true
 ): boolean {
   for (const node of nodes) {
-    const enabled = ancestorsEnabled && node.status === 1;
+    const enabled = ancestorsEnabled && node.status === BINARY_STATUS.ENABLED;
     if (node.id === id) return enabled;
     if (isEffectivelyEnabled(id, node.children || [], enabled)) return true;
   }
@@ -196,10 +196,12 @@ onMounted(refresh);
             </template>
             <template #status="{ row }">
               <el-tag
-                :type="row.status === 1 ? 'success' : 'danger'"
+                :type="
+                  row.status === BINARY_STATUS.ENABLED ? 'success' : 'danger'
+                "
                 size="small"
               >
-                {{ row.status === 1 ? "启用" : "停用" }}
+                {{ row.status === BINARY_STATUS.ENABLED ? "启用" : "停用" }}
               </el-tag>
             </template>
             <template #operation="{ row }">

@@ -8,6 +8,7 @@ import { message } from "@/utils/message";
 import { storageLocal } from "@pureadmin/utils";
 import { getRoleList, deleteRole, type RoleRecord } from "@/api/role";
 import { getMenuTree, type MenuRecord } from "@/api/menu";
+import { BINARY_STATUS } from "@/api/status";
 import { formatDateTime } from "@/utils/date";
 import type { TableColumns } from "@pureadmin/table";
 import RoleForm from "./form.vue";
@@ -261,10 +262,12 @@ onMounted(() => {
           >
             <template #status="{ row }">
               <el-tag
-                :type="row.status === 1 ? 'success' : 'danger'"
+                :type="
+                  row.status === BINARY_STATUS.ENABLED ? 'success' : 'danger'
+                "
                 size="small"
               >
-                {{ row.status === 1 ? "正常" : "停用" }}
+                {{ row.status === BINARY_STATUS.ENABLED ? "正常" : "停用" }}
               </el-tag>
             </template>
             <template #operation="{ row }">

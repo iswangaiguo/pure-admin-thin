@@ -12,9 +12,9 @@ import {
   updateDepartment,
   type DepartmentFormData,
   type DepartmentLeader,
-  type DepartmentRecord,
-  type StatusCode
+  type DepartmentRecord
 } from "@/api/department";
+import { BINARY_STATUS, type StatusCode } from "@/api/status";
 
 defineOptions({ name: "DepartmentForm" });
 
@@ -50,7 +50,7 @@ const formData = reactive<DepartmentFormData>({
   code: "",
   leaderId: null,
   sort: 0,
-  status: 1
+  status: BINARY_STATUS.ENABLED
 });
 const fieldErrors = reactive<Record<FormField, string>>({
   parentId: "",
@@ -74,7 +74,8 @@ function buildParentOptions(
 ): ParentOption[] {
   return nodes.flatMap(node => {
     if (node.id === props.editRow?.id) return [];
-    const effectiveEnabled = ancestorsEnabled && node.status === 1;
+    const effectiveEnabled =
+      ancestorsEnabled && node.status === BINARY_STATUS.ENABLED;
     return [
       {
         id: node.id,
@@ -98,7 +99,7 @@ function resetForm() {
     code: props.editRow?.code ?? "",
     leaderId: props.editRow?.leaderId ?? null,
     sort: props.editRow?.sort ?? 0,
-    status: (props.editRow?.status ?? 1) as StatusCode
+    status: (props.editRow?.status ?? BINARY_STATUS.ENABLED) as StatusCode
   });
   leaderOptions.value = [];
 }

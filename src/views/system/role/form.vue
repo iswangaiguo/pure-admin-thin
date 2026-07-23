@@ -14,6 +14,7 @@ import {
   type RoleRecord
 } from "@/api/role";
 import type { MenuRecord } from "@/api/menu";
+import { BINARY_STATUS } from "@/api/status";
 
 defineOptions({
   name: "RoleForm"
@@ -56,7 +57,7 @@ const submitLoading = ref(false);
 const defaultFormData: RoleFormData = {
   code: "",
   name: "",
-  status: 1
+  status: BINARY_STATUS.ENABLED
 };
 
 const formData = reactive<RoleFormData>({ ...defaultFormData });

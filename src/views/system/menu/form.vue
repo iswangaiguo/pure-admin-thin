@@ -13,6 +13,7 @@ import {
   type MenuRecord,
   type MenuFormData
 } from "@/api/menu";
+import { BINARY_STATUS } from "@/api/status";
 import { cloneDeep } from "@pureadmin/utils";
 
 defineOptions({
@@ -152,7 +153,7 @@ const defaultFormData: MenuFormData = {
   icon: "",
   rank: 0,
   showLink: true,
-  status: 1,
+  status: BINARY_STATUS.ENABLED,
   visible: true
 };
 

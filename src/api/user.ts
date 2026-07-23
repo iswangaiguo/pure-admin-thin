@@ -1,6 +1,7 @@
 import { http } from "@/utils/http";
 import type { RoleRecord } from "@/api/role";
 import type { DepartmentOption } from "@/api/department";
+import type { StatusCode } from "@/api/status";
 
 /** 登录请求参数 */
 export type LoginParams = {
@@ -100,7 +101,6 @@ export const logoutApi = () => {
 
 // ==================== 用户管理 CRUD ====================
 
-export type StatusCode = 0 | 1;
 export type GenderCode = 0 | 1 | 2;
 
 /** 用户记录 */
@@ -251,7 +251,7 @@ export const createUser = (data: UserFormData) => {
 
 /** 修改用户（仅资料） */
 export const updateUser = (id: number, data: UserProfileFormData) => {
-  return http.request<UserResult>("put", `/api/v1/users/${id}`, { data });
+  return http.request<UserResult>("patch", `/api/v1/users/${id}`, { data });
 };
 
 /** 重置用户密码 */
